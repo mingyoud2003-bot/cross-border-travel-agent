@@ -1,0 +1,38 @@
+# Three-minute portfolio demo
+
+## Setup
+
+```bash
+PORT=8000 python main.py
+python scripts/demo_product.py
+```
+
+## Story
+
+1. Submit a decision request without taxes. Show that the Agent asks only for the
+   missing value and does not call an unauthorized tool.
+2. Add taxes and BA Silver status. Show the ordered railway, deterministic mileage,
+   grounded loyalty, and decision-composer calls in Trace; show turn-level provenance
+   in State.
+3. Change only the cash price. Show that the railway and loyalty results are retained,
+   mileage is recomputed, and the recommendation changes.
+4. Refresh/restart the service and reopen the session endpoint to demonstrate SQLite
+   persistence.
+5. Open `/metrics` and the Eval report to connect the UI behavior to operational and
+   regression evidence.
+
+## Interview explanation
+
+The central design choice is that the model handles language but does not own facts or
+authorization. Structured state decides whether a tool is legal, provenance verifies
+where each argument came from, selective invalidation controls recomputation, and a
+deterministic composer owns the recommendation contract. The Eval suite was built
+from actual failure modes, including stale-answer reuse after user corrections.
+
+## Honest limitations
+
+- The railway provider returns schedules rather than ticket prices.
+- The loyalty corpus is intentionally small and bounded.
+- The local deployment is single-worker; distributed coordination is documented but
+  not claimed as implemented.
+- The project provides decision support and never purchases a ticket.

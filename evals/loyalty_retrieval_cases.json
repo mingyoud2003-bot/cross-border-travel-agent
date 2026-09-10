@@ -1,0 +1,47 @@
+[
+  {
+    "id": "lounge_access",
+    "query": "我是 BA Silver，乘坐 Qatar Airways 经济舱可以进入休息室吗？",
+    "expected_ids": [
+      "ba_silver_tier",
+      "sapphire_lounge",
+      "qatar_membership"
+    ],
+    "should_answer": true
+  },
+  {
+    "id": "guest_access",
+    "query": "我是 BA Silver，可以带一个朋友一起进入 oneworld 休息室吗？",
+    "expected_ids": [
+      "ba_silver_tier",
+      "sapphire_guest"
+    ],
+    "should_answer": true
+  },
+  {
+    "id": "silver_benefits",
+    "query": "BA Silver 有哪些主要权益？",
+    "expected_ids": [
+      "ba_silver_benefits"
+    ],
+    "should_answer": true
+  },
+  {
+    "id": "star_alliance_status",
+    "query": "Lufthansa Senator 对应 Star Alliance 什么等级？",
+    "expected_ids": [],
+    "should_answer": false
+  },
+  {
+    "id": "singapore_lounge",
+    "query": "我是 Lufthansa Senator，坐新加坡航空可以进休息室吗？",
+    "expected_ids": [],
+    "should_answer": false
+  },
+  {
+    "id": "delta_benefits",
+    "query": "Delta SkyMiles Platinum 有哪些休息室权益？",
+    "expected_ids": [],
+    "should_answer": false
+  }
+]

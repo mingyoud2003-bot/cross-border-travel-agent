@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Evidence-grounded cross-border travel decision agent" />
+    <title>Atlas · Travel Decision Agent</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">A</div>
+          <div>
+            <p class="eyebrow">DECISION INTELLIGENCE</p>
+            <h1>Atlas</h1>
+          </div>
+        </div>
+        <div class="top-actions">
+          <span id="health" class="health"><i></i> Connecting</span>
+          <button id="new-session" class="ghost-button" type="button">New session</button>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <section class="conversation-panel">
+          <div class="hero" id="hero">
+            <p class="eyebrow">CROSS-BORDER TRAVEL</p>
+            <h2>Make the tradeoff visible.</h2>
+            <p>班次、现金、里程与会员权益，汇成一份有证据的决定。</p>
+            <div class="examples">
+              <button class="example" data-prompt="{{date}}从伦敦去巴黎，现金票400英镑，奖励票20000 Avios加50英镑税费，我是BA Silver，应该怎么选？">
+                <span>综合决策</span><small>London → Paris · BA Silver</small>
+              </button>
+              <button class="example" data-prompt="请查{{date}}从伦敦去布鲁塞尔的火车">
+                <span>铁路计划</span><small>London → Brussels</small>
+              </button>
+              <button class="example" data-prompt="现金票500英镑，需要25000 Avios，税费60英镑，兑换价值是多少？">
+                <span>里程价值</span><small>Deterministic calculation</small>
+              </button>
+            </div>
+          </div>
+
+          <div id="messages" class="messages" aria-live="polite"></div>
+
+          <form id="chat-form" class="composer">
+            <textarea id="message" rows="1" maxlength="4000" placeholder="描述路线、日期、现金票、奖励票与会员身份…" required></textarea>
+            <button id="send" type="submit" aria-label="发送">
+              <span>Send</span><b>↗</b>
+            </button>
+          </form>
+          <p class="disclaimer">计划时刻与规则可能变化，请在购买前向承运方复核。</p>
+        </section>
+
+        <aside class="inspector">
+          <div class="inspector-tabs" role="tablist">
+            <button class="tab active" data-tab="state" type="button">State</button>
+            <button class="tab" data-tab="trace" type="button">Trace</button>
+          </div>
+          <section id="state-panel" class="tab-panel active">
+            <div class="panel-heading">
+              <div><p class="eyebrow">STRUCTURED MEMORY</p><h3>Confirmed facts</h3></div>
+              <span id="task-badge" class="task-badge">general</span>
+            </div>
+            <div id="state-content" class="empty-state">
+              <div class="empty-orbit"></div>
+              <p>参数将在用户明确提供后出现。</p>
+            </div>
+          </section>
+          <section id="trace-panel" class="tab-panel">
+            <div class="panel-heading">
+              <div><p class="eyebrow">LOCAL OBSERVABILITY</p><h3>Execution trace</h3></div>
+              <span id="latency">—</span>
+            </div>
+            <div id="trace-content" class="empty-state">
+              <div class="empty-orbit"></div>
+              <p>工具调用将在这里按顺序显示。</p>
+            </div>
+          </section>
+        </aside>
+      </section>
+    </main>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

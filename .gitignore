@@ -1,0 +1,14 @@
+.env
+.env.local
+.DS_Store
+.venv/
+__pycache__/
+.pytest_cache/
+build/
+*.egg-info/
+*.py[cod]
+*.db
+.data/
+evals/results/run-*.json
+manual_test_*.py
+inspect_tools.py

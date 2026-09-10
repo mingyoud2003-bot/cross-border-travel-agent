@@ -1,0 +1,1190 @@
+[
+  {
+    "id": "train_complete_london_paris",
+    "category": "train",
+    "query": "我想{{DATE+30_CN}}从伦敦去巴黎，请帮我查一下火车。",
+    "expected_tool": "search_train",
+    "expected_behavior": "tool_call"
+  },
+  {
+    "id": "train_complete_london_brussels",
+    "category": "train",
+    "query": "帮我查{{DATE+32_CN}}从伦敦到布鲁塞尔的火车。",
+    "expected_tool": "search_train",
+    "expected_behavior": "tool_call"
+  },
+  {
+    "id": "train_complete_brussels_paris",
+    "category": "train",
+    "query": "{{DATE+35_CN}}布鲁塞尔去巴黎，有什么火车？",
+    "expected_tool": "search_train",
+    "expected_behavior": "tool_call"
+  },
+  {
+    "id": "train_complete_paris_london",
+    "category": "train",
+    "query": "请查一下{{DATE+38_CN}}从巴黎回伦敦的火车。",
+    "expected_tool": "search_train",
+    "expected_behavior": "tool_call"
+  },
+  {
+    "id": "train_complete_short_form",
+    "category": "train",
+    "query": "查{{DATE+40_CN}}伦敦到巴黎火车。",
+    "expected_tool": "search_train",
+    "expected_behavior": "tool_call"
+  },
+  {
+    "id": "train_missing_date_london_paris",
+    "category": "train",
+    "query": "我想从伦敦去巴黎，帮我查一下火车。",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_clarification_terms": [
+      "日期",
+      "哪天"
+    ]
+  },
+  {
+    "id": "train_missing_date_brussels_london",
+    "category": "train",
+    "query": "布鲁塞尔到伦敦有什么火车？",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_clarification_terms": [
+      "日期",
+      "哪天"
+    ]
+  },
+  {
+    "id": "train_missing_date_paris_brussels",
+    "category": "train",
+    "query": "帮我看看巴黎去布鲁塞尔的火车。",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_clarification_terms": [
+      "日期",
+      "哪天"
+    ]
+  },
+  {
+    "id": "train_missing_origin_paris",
+    "category": "train",
+    "query": "我想{{DATE+30_CN}}去巴黎，帮我查一下火车。",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_clarification_terms": [
+      "出发",
+      "起点"
+    ]
+  },
+  {
+    "id": "train_missing_origin_brussels",
+    "category": "train",
+    "query": "{{DATE+32_CN}}我要去布鲁塞尔，帮我查火车。",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_clarification_terms": [
+      "出发",
+      "起点"
+    ]
+  },
+  {
+    "id": "train_missing_destination_london",
+    "category": "train",
+    "query": "{{DATE+32_CN}}我从伦敦出发，帮我查火车。",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_clarification_terms": [
+      "目的",
+      "去哪",
+      "到哪里"
+    ]
+  },
+  {
+    "id": "train_missing_destination_paris",
+    "category": "train",
+    "query": "我{{DATE+36_CN}}从巴黎出发，想坐火车。",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_clarification_terms": [
+      "目的",
+      "去哪",
+      "到哪里"
+    ]
+  },
+  {
+    "id": "train_unsupported_destination_rome",
+    "category": "train",
+    "query": "我想{{DATE+30_CN}}从伦敦去罗马，请帮我查火车。",
+    "expected_tool": "search_train",
+    "expected_behavior": "provider_abstain"
+  },
+  {
+    "id": "train_unsupported_destination_berlin",
+    "category": "train",
+    "query": "帮我查{{DATE+31_CN}}从巴黎去柏林的火车。",
+    "expected_tool": "search_train",
+    "expected_behavior": "provider_abstain"
+  },
+  {
+    "id": "train_unsupported_destination_madrid",
+    "category": "train",
+    "query": "{{DATE+33_CN}}伦敦到马德里火车怎么坐？",
+    "expected_tool": "search_train",
+    "expected_behavior": "provider_abstain"
+  },
+  {
+    "id": "train_unsupported_origin_rome",
+    "category": "train",
+    "query": "{{DATE+34_CN}}从罗马去巴黎，帮我查火车。",
+    "expected_tool": "search_train",
+    "expected_behavior": "provider_abstain"
+  },
+  {
+    "id": "train_unsupported_origin_berlin",
+    "category": "train",
+    "query": "请查{{DATE+37_CN}}从柏林到伦敦的火车。",
+    "expected_tool": "search_train",
+    "expected_behavior": "provider_abstain"
+  },
+  {
+    "id": "train_unsupported_destination_milan",
+    "category": "train",
+    "query": "{{DATE+39_CN}}从布鲁塞尔去米兰有火车吗？",
+    "expected_tool": "search_train",
+    "expected_behavior": "provider_abstain"
+  },
+  {
+    "id": "mileage_complete_400_50_20000",
+    "category": "mileage",
+    "query": "一张票现金400英镑，税费50英镑，需要20000 Avios，这次兑换价值是多少？",
+    "expected_tool": "calculate_mileage_value",
+    "expected_behavior": "tool_call"
+  },
+  {
+    "id": "mileage_complete_250_30_15000",
+    "category": "mileage",
+    "query": "现金票250英镑，税费30英镑，兑换要15000 Avios，帮我算一下每点价值。",
+    "expected_tool": "calculate_mileage_value",
+    "expected_behavior": "tool_call"
+  },
+  {
+    "id": "mileage_complete_zero_tax",
+    "category": "mileage",
+    "query": "这张票现金300英镑，需要18000 Avios，税费0英镑，兑换价值是多少？",
+    "expected_tool": "calculate_mileage_value",
+    "expected_behavior": "tool_call"
+  },
+  {
+    "id": "mileage_complete_no_tax_phrase",
+    "category": "mileage",
+    "query": "现金价500英镑，25000 Avios，而且没有税费，帮我算兑换价值。",
+    "expected_tool": "calculate_mileage_value",
+    "expected_behavior": "tool_call"
+  },
+  {
+    "id": "mileage_complete_reordered",
+    "category": "mileage",
+    "query": "需要30000 Avios，税费80英镑，现金票价620英镑，这样每个 Avios 值多少？",
+    "expected_tool": "calculate_mileage_value",
+    "expected_behavior": "tool_call"
+  },
+  {
+    "id": "mileage_complete_mixed_english",
+    "category": "mileage",
+    "query": "20,000 Avios，cash price £400，taxes £50，帮我算一下兑换价值。",
+    "expected_tool": "calculate_mileage_value",
+    "expected_behavior": "tool_call"
+  },
+  {
+    "id": "mileage_missing_tax",
+    "category": "mileage",
+    "query": "一张票现金400英镑，需要20000 Avios，这次兑换值不值？",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_clarification_terms": [
+      "税",
+      "税费"
+    ]
+  },
+  {
+    "id": "mileage_missing_tax_paraphrase",
+    "category": "mileage",
+    "query": "现金票要520英镑，兑换需要30000 Avios，帮我看看划不划算。",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_clarification_terms": [
+      "税",
+      "税费"
+    ]
+  },
+  {
+    "id": "mileage_missing_miles",
+    "category": "mileage",
+    "query": "现金票400英镑，税费50英镑，帮我算一下兑换价值。",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_clarification_terms": [
+      "里程",
+      "Avios",
+      "积分"
+    ]
+  },
+  {
+    "id": "mileage_missing_cash_price",
+    "category": "mileage",
+    "query": "需要20000 Avios，税费50英镑，帮我算一下兑换价值。",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_clarification_terms": [
+      "现金",
+      "票价",
+      "价格"
+    ]
+  },
+  {
+    "id": "mileage_missing_cash_price_paraphrase",
+    "category": "mileage",
+    "query": "奖励票要25000 Avios，另外交60英镑税费，值不值？",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_clarification_terms": [
+      "现金",
+      "票价",
+      "价格"
+    ]
+  },
+  {
+    "id": "mileage_complete_chinese_compact",
+    "category": "mileage",
+    "query": "20000里程+50英镑税费，对比400英镑现金票，价值多少？",
+    "expected_tool": "calculate_mileage_value",
+    "expected_behavior": "tool_call"
+  },
+  {
+    "id": "loyalty_supported_lounge",
+    "category": "loyalty",
+    "query": "我是 BA Silver，乘坐 Qatar Airways 经济舱可以进入休息室吗？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "grounded_answer",
+    "required_evidence_ids": [
+      "ba_silver_tier",
+      "qatar_membership",
+      "sapphire_lounge"
+    ]
+  },
+  {
+    "id": "loyalty_supported_guest",
+    "category": "loyalty",
+    "query": "我是 BA Silver，可以带一个朋友一起进入 oneworld 休息室吗？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "grounded_answer",
+    "required_evidence_ids": [
+      "ba_silver_tier",
+      "sapphire_guest"
+    ]
+  },
+  {
+    "id": "loyalty_supported_silver_benefits",
+    "category": "loyalty",
+    "query": "BA Silver 有哪些主要权益？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "grounded_answer",
+    "required_evidence_ids": [
+      "ba_silver_benefits"
+    ]
+  },
+  {
+    "id": "loyalty_supported_chinese_alias_lounge",
+    "category": "loyalty",
+    "query": "我是英航银卡，坐卡塔尔航空经济舱能进休息室吗？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "grounded_answer",
+    "required_evidence_ids": [
+      "ba_silver_tier",
+      "qatar_membership",
+      "sapphire_lounge"
+    ]
+  },
+  {
+    "id": "loyalty_supported_full_english_tier",
+    "category": "loyalty",
+    "query": "我是 British Airways Silver，乘 Qatar Airways 能使用休息室吗？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "grounded_answer",
+    "required_evidence_ids": [
+      "ba_silver_tier",
+      "qatar_membership",
+      "sapphire_lounge"
+    ]
+  },
+  {
+    "id": "loyalty_supported_guest_chinese_alias",
+    "category": "loyalty",
+    "query": "英航银卡能带一个朋友进寰宇一家休息室吗？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "grounded_answer",
+    "required_evidence_ids": [
+      "ba_silver_tier",
+      "sapphire_guest"
+    ]
+  },
+  {
+    "id": "loyalty_supported_sapphire_guest",
+    "category": "loyalty",
+    "query": "oneworld Sapphire 可以带一位宾客进休息室吗？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "grounded_answer",
+    "required_evidence_ids": [
+      "sapphire_guest"
+    ]
+  },
+  {
+    "id": "loyalty_supported_qatar_membership",
+    "category": "loyalty",
+    "query": "Qatar Airways 是不是 oneworld 成员？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "grounded_answer",
+    "required_evidence_ids": [
+      "qatar_membership"
+    ]
+  },
+  {
+    "id": "loyalty_supported_tier_mapping",
+    "category": "loyalty",
+    "query": "BA Silver 对应 oneworld 什么等级？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "grounded_answer",
+    "required_evidence_ids": [
+      "ba_silver_tier"
+    ]
+  },
+  {
+    "id": "loyalty_supported_oneworld_lounge",
+    "category": "loyalty",
+    "query": "oneworld Sapphire 一般有什么休息室权益？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "grounded_answer",
+    "required_evidence_ids": [
+      "sapphire_lounge"
+    ]
+  },
+  {
+    "id": "loyalty_out_lufthansa_status",
+    "category": "loyalty",
+    "query": "Lufthansa Senator 对应 Star Alliance 什么等级？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "knowledge_abstain"
+  },
+  {
+    "id": "loyalty_out_singapore_lounge",
+    "category": "loyalty",
+    "query": "我是 Lufthansa Senator，坐新加坡航空可以进入休息室吗？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "knowledge_abstain"
+  },
+  {
+    "id": "loyalty_out_delta",
+    "category": "loyalty",
+    "query": "Delta SkyMiles Platinum 有哪些休息室权益？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "knowledge_abstain"
+  },
+  {
+    "id": "loyalty_out_emirates",
+    "category": "loyalty",
+    "query": "Emirates Skywards Gold 可以进哪些休息室？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "knowledge_abstain"
+  },
+  {
+    "id": "loyalty_out_united",
+    "category": "loyalty",
+    "query": "United MileagePlus Premier Gold 有什么联盟权益？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "knowledge_abstain"
+  },
+  {
+    "id": "loyalty_out_airfrance",
+    "category": "loyalty",
+    "query": "Air France Flying Blue Gold 可以使用天合联盟休息室吗？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "knowledge_abstain"
+  },
+  {
+    "id": "general_hello",
+    "category": "general",
+    "query": "你好。",
+    "expected_tool": null,
+    "expected_behavior": "direct_answer"
+  },
+  {
+    "id": "general_capabilities",
+    "category": "general",
+    "query": "你都能帮我做什么？",
+    "expected_tool": null,
+    "expected_behavior": "direct_answer"
+  },
+  {
+    "id": "general_weather_outside_capability",
+    "category": "general",
+    "query": "你能告诉我今天北京天气吗？",
+    "expected_tool": null,
+    "expected_behavior": "direct_answer"
+  },
+  {
+    "id": "general_unrelated_writing",
+    "category": "general",
+    "query": "帮我写一首关于旅行的四句小诗。",
+    "expected_tool": null,
+    "expected_behavior": "direct_answer"
+  },
+  {
+    "id": "train_relative_next_week",
+    "category": "train",
+    "query": "下周从伦敦去巴黎，帮我查火车。",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_missing_fields": ["travel_date"]
+  },
+  {
+    "id": "train_relative_weekend",
+    "category": "train",
+    "query": "周末巴黎到布鲁塞尔有火车吗？",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_missing_fields": ["travel_date"]
+  },
+  {
+    "id": "train_complete_english_aliases",
+    "category": "train",
+    "query": "Find a train from London to Paris on {{DATE+41}}.",
+    "expected_tool": "search_train",
+    "expected_behavior": "tool_call",
+    "expected_state": {
+      "current_task": "train",
+      "slots": {"origin": "伦敦", "destination": "巴黎", "travel_date": "{{DATE+41}}"}
+    }
+  },
+  {
+    "id": "train_english_missing_date",
+    "category": "train",
+    "query": "Please find a train from London to Brussels.",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_missing_fields": ["travel_date"]
+  },
+  {
+    "id": "train_invalid_calendar_date",
+    "category": "train",
+    "query": "查2027年2月30日伦敦到巴黎的火车。",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_missing_fields": ["travel_date"]
+  },
+  {
+    "id": "multiturn_train_date_later",
+    "category": "multi_turn",
+    "turns": [
+      {
+        "query": "我想从伦敦去巴黎坐火车。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["travel_date"],
+        "expected_state": {
+          "current_task": "train",
+          "slots": {"origin": "伦敦", "destination": "巴黎"},
+          "provenance_turns": {"origin": 1, "destination": 1}
+        }
+      },
+      {
+        "query": "{{DATE+42_CN}}。",
+        "expected_tool": "search_train",
+        "expected_behavior": "tool_call",
+        "expected_state": {
+          "current_task": "train",
+          "slots": {"travel_date": "{{DATE+42}}"},
+          "provenance_turns": {"travel_date": 2}
+        }
+      }
+    ]
+  },
+  {
+    "id": "multiturn_train_three_slots",
+    "category": "multi_turn",
+    "turns": [
+      {
+        "query": "我想坐火车去巴黎。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["origin", "travel_date"]
+      },
+      {
+        "query": "从伦敦出发。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["travel_date"]
+      },
+      {
+        "query": "日期是{{DATE+43_CN}}。",
+        "expected_tool": "search_train",
+        "expected_behavior": "tool_call",
+        "expected_state": {
+          "current_task": "train",
+          "slots": {"origin": "伦敦", "destination": "巴黎", "travel_date": "{{DATE+43}}"},
+          "provenance_turns": {"destination": 1, "origin": 2, "travel_date": 3}
+        }
+      }
+    ]
+  },
+  {
+    "id": "multiturn_train_origin_later",
+    "category": "multi_turn",
+    "turns": [
+      {
+        "query": "{{DATE+44_CN}}我想坐火车去布鲁塞尔。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["origin"]
+      },
+      {
+        "query": "从巴黎出发。",
+        "expected_tool": "search_train",
+        "expected_behavior": "tool_call",
+        "expected_state": {
+          "slots": {"origin": "巴黎", "destination": "布鲁塞尔", "travel_date": "{{DATE+44}}"},
+          "provenance_turns": {"origin": 2}
+        }
+      }
+    ]
+  },
+  {
+    "id": "multiturn_update_destination",
+    "category": "multi_turn",
+    "turns": [
+      {
+        "query": "查{{DATE+45_CN}}伦敦到巴黎的火车。",
+        "expected_tool": "search_train",
+        "expected_behavior": "tool_call"
+      },
+      {
+        "query": "目的地改成布鲁塞尔。",
+        "expected_tool": "search_train",
+        "expected_behavior": "tool_call",
+        "expected_state": {
+          "slots": {"origin": "伦敦", "destination": "布鲁塞尔", "travel_date": "{{DATE+45}}"},
+          "provenance_turns": {"origin": 1, "destination": 2, "travel_date": 1}
+        }
+      }
+    ]
+  },
+  {
+    "id": "multiturn_update_date",
+    "category": "multi_turn",
+    "turns": [
+      {
+        "query": "查{{DATE+46_CN}}巴黎到伦敦的火车。",
+        "expected_tool": "search_train",
+        "expected_behavior": "tool_call"
+      },
+      {
+        "query": "日期改成{{DATE+47_CN}}。",
+        "expected_tool": "search_train",
+        "expected_behavior": "tool_call",
+        "expected_state": {
+          "slots": {"travel_date": "{{DATE+47}}"},
+          "provenance_turns": {"travel_date": 2}
+        }
+      }
+    ]
+  },
+  {
+    "id": "multiturn_update_origin",
+    "category": "multi_turn",
+    "turns": [
+      {
+        "query": "查{{DATE+48_CN}}伦敦到巴黎的火车。",
+        "expected_tool": "search_train",
+        "expected_behavior": "tool_call"
+      },
+      {
+        "query": "出发地改为布鲁塞尔。",
+        "expected_tool": "search_train",
+        "expected_behavior": "tool_call",
+        "expected_state": {"slots": {"origin": "布鲁塞尔"}, "provenance_turns": {"origin": 2}}
+      }
+    ]
+  },
+  {
+    "id": "multiturn_mileage_three_slots",
+    "category": "multi_turn",
+    "turns": [
+      {
+        "query": "兑换需要25000 Avios。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["cash_price", "taxes"]
+      },
+      {
+        "query": "现金票价500英镑。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["taxes"]
+      },
+      {
+        "query": "税费60英镑。",
+        "expected_tool": "calculate_mileage_value",
+        "expected_behavior": "tool_call",
+        "expected_pence_per_mile": 1.76,
+        "expected_state": {
+          "slots": {"miles_required": 25000, "cash_price": 500.0, "taxes": 60.0},
+          "provenance_turns": {"miles_required": 1, "cash_price": 2, "taxes": 3}
+        }
+      }
+    ]
+  },
+  {
+    "id": "multiturn_mileage_tax_later",
+    "category": "multi_turn",
+    "turns": [
+      {
+        "query": "现金400英镑，需要20000 Avios，算兑换价值。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["taxes"]
+      },
+      {
+        "query": "税费是50英镑。",
+        "expected_tool": "calculate_mileage_value",
+        "expected_behavior": "tool_call",
+        "expected_pence_per_mile": 1.75
+      }
+    ]
+  },
+  {
+    "id": "multiturn_mileage_cash_later",
+    "category": "multi_turn",
+    "turns": [
+      {
+        "query": "20000 Avios，税费50英镑，帮我算。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["cash_price"]
+      },
+      {
+        "query": "现金票价400英镑。",
+        "expected_tool": "calculate_mileage_value",
+        "expected_behavior": "tool_call",
+        "expected_pence_per_mile": 1.75
+      }
+    ]
+  },
+  {
+    "id": "multiturn_mileage_miles_later",
+    "category": "multi_turn",
+    "turns": [
+      {
+        "query": "现金400英镑，税费50英镑，帮我算里程兑换价值。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["miles_required"]
+      },
+      {
+        "query": "需要20000 Avios。",
+        "expected_tool": "calculate_mileage_value",
+        "expected_behavior": "tool_call",
+        "expected_pence_per_mile": 1.75
+      }
+    ]
+  },
+  {
+    "id": "multiturn_update_cash_price",
+    "category": "multi_turn",
+    "turns": [
+      {
+        "query": "20000 Avios，现金400英镑，税费50英镑，算兑换价值。",
+        "expected_tool": "calculate_mileage_value",
+        "expected_behavior": "tool_call",
+        "expected_pence_per_mile": 1.75
+      },
+      {
+        "query": "现金票价改成500英镑。",
+        "expected_tool": "calculate_mileage_value",
+        "expected_behavior": "tool_call",
+        "expected_pence_per_mile": 2.25,
+        "expected_state": {"slots": {"cash_price": 500.0}, "provenance_turns": {"cash_price": 2}}
+      }
+    ]
+  },
+  {
+    "id": "multiturn_update_taxes",
+    "category": "multi_turn",
+    "turns": [
+      {
+        "query": "20000 Avios，现金400英镑，税费50英镑，算兑换价值。",
+        "expected_tool": "calculate_mileage_value",
+        "expected_behavior": "tool_call"
+      },
+      {
+        "query": "更正一下，税费是80英镑。",
+        "expected_tool": "calculate_mileage_value",
+        "expected_behavior": "tool_call",
+        "expected_pence_per_mile": 1.6,
+        "expected_state": {"slots": {"taxes": 80.0}, "provenance_turns": {"taxes": 2}}
+      }
+    ]
+  },
+  {
+    "id": "multiturn_update_miles",
+    "category": "multi_turn",
+    "turns": [
+      {
+        "query": "20000 Avios，现金400英镑，税费40英镑，算兑换价值。",
+        "expected_tool": "calculate_mileage_value",
+        "expected_behavior": "tool_call"
+      },
+      {
+        "query": "里程改成30000 Avios。",
+        "expected_tool": "calculate_mileage_value",
+        "expected_behavior": "tool_call",
+        "expected_pence_per_mile": 1.2,
+        "expected_state": {"slots": {"miles_required": 30000}, "provenance_turns": {"miles_required": 2}}
+      }
+    ]
+  },
+  {
+    "id": "mileage_invalid_zero_miles",
+    "category": "mileage",
+    "query": "0 Avios，现金400英镑，税费50英镑，算兑换价值。",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_clarification_terms": ["大于零", "有效"]
+  },
+  {
+    "id": "mileage_invalid_tax_above_cash",
+    "category": "mileage",
+    "query": "20000 Avios，现金50英镑，税费60英镑，算兑换价值。",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_clarification_terms": ["税费", "确认"]
+  },
+  {
+    "id": "mileage_decimal_prices",
+    "category": "mileage",
+    "query": "25000 Avios，现金票价499.5英镑，税费49.5英镑，算兑换价值。",
+    "expected_tool": "calculate_mileage_value",
+    "expected_behavior": "tool_call",
+    "expected_pence_per_mile": 1.8
+  },
+  {
+    "id": "mileage_explicit_no_surcharge",
+    "category": "mileage",
+    "query": "10000 Avios，现金200英镑，不收附加费，兑换价值多少？",
+    "expected_tool": "calculate_mileage_value",
+    "expected_behavior": "tool_call",
+    "expected_pence_per_mile": 2.0
+  },
+  {
+    "id": "switch_train_to_mileage",
+    "category": "task_switch",
+    "turns": [
+      {
+        "query": "从伦敦去巴黎坐火车。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["travel_date"]
+      },
+      {
+        "query": "先不查了。20000 Avios，现金400英镑，税费50英镑，算兑换价值。",
+        "expected_tool": "calculate_mileage_value",
+        "expected_behavior": "tool_call",
+        "expected_state": {"current_task": "mileage", "previous_task": "train"}
+      }
+    ]
+  },
+  {
+    "id": "switch_mileage_to_train",
+    "category": "task_switch",
+    "turns": [
+      {
+        "query": "20000 Avios 和50英镑税费，帮我算。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["cash_price"]
+      },
+      {
+        "query": "改查{{DATE+50_CN}}伦敦到巴黎的火车。",
+        "expected_tool": "search_train",
+        "expected_behavior": "tool_call",
+        "expected_state": {"current_task": "train", "previous_task": "mileage"}
+      }
+    ]
+  },
+  {
+    "id": "switch_train_to_loyalty",
+    "category": "task_switch",
+    "turns": [
+      {
+        "query": "查{{DATE+51_CN}}伦敦到巴黎的火车。",
+        "expected_tool": "search_train",
+        "expected_behavior": "tool_call"
+      },
+      {
+        "query": "另外，BA Silver 对应 oneworld 什么等级？",
+        "expected_tool": "retrieve_loyalty_benefits",
+        "expected_behavior": "grounded_answer",
+        "required_evidence_ids": ["ba_silver_tier"],
+        "expected_state": {"current_task": "loyalty", "previous_task": "train"}
+      }
+    ]
+  },
+  {
+    "id": "switch_loyalty_to_train_incomplete",
+    "category": "task_switch",
+    "turns": [
+      {
+        "query": "BA Silver 对应 oneworld 什么等级？",
+        "expected_tool": "retrieve_loyalty_benefits",
+        "expected_behavior": "grounded_answer",
+        "required_evidence_ids": ["ba_silver_tier"]
+      },
+      {
+        "query": "再查伦敦到巴黎的火车。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["travel_date"],
+        "expected_state": {"current_task": "train", "previous_task": "loyalty"}
+      }
+    ]
+  },
+  {
+    "id": "switch_train_to_general",
+    "category": "task_switch",
+    "turns": [
+      {
+        "query": "从伦敦去巴黎坐火车。",
+        "expected_tool": null,
+        "expected_behavior": "clarify"
+      },
+      {
+        "query": "算了，先介绍一下你自己。",
+        "expected_tool": null,
+        "expected_behavior": "direct_answer",
+        "expected_state": {"current_task": "general", "previous_task": "train"}
+      }
+    ]
+  },
+  {
+    "id": "switch_return_train_clears_stale",
+    "category": "task_switch",
+    "turns": [
+      {
+        "query": "查{{DATE+52_CN}}伦敦到巴黎的火车。",
+        "expected_tool": "search_train",
+        "expected_behavior": "tool_call"
+      },
+      {
+        "query": "20000 Avios，现金400英镑，税费50英镑，算兑换价值。",
+        "expected_tool": "calculate_mileage_value",
+        "expected_behavior": "tool_call"
+      },
+      {
+        "query": "再帮我查火车。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["origin", "destination", "travel_date"],
+        "expected_state": {
+          "current_task": "train",
+          "previous_task": "mileage",
+          "missing_fields": ["origin", "destination", "travel_date"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "switch_return_mileage_clears_stale",
+    "category": "task_switch",
+    "turns": [
+      {
+        "query": "20000 Avios，现金400英镑，税费50英镑，算兑换价值。",
+        "expected_tool": "calculate_mileage_value",
+        "expected_behavior": "tool_call"
+      },
+      {
+        "query": "查{{DATE+53_CN}}伦敦到巴黎的火车。",
+        "expected_tool": "search_train",
+        "expected_behavior": "tool_call"
+      },
+      {
+        "query": "还是算里程兑换吧。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["miles_required", "cash_price", "taxes"],
+        "expected_state": {
+          "current_task": "mileage",
+          "previous_task": "train",
+          "missing_fields": ["miles_required", "cash_price", "taxes"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "loyalty_out_chinese_star_alliance",
+    "category": "loyalty",
+    "query": "星空联盟金卡能带客进休息室吗？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "knowledge_abstain"
+  },
+  {
+    "id": "loyalty_out_mixed_language",
+    "category": "loyalty",
+    "query": "ANA Platinum 的 Star Alliance lounge access 是什么？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "knowledge_abstain"
+  },
+  {
+    "id": "loyalty_supported_tier_paraphrase",
+    "category": "loyalty",
+    "query": "英航银卡换算成寰宇一家是什么会籍？",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "grounded_answer",
+    "required_evidence_ids": ["ba_silver_tier"]
+  },
+  {
+    "id": "loyalty_supported_guest_english",
+    "category": "loyalty",
+    "query": "Can a oneworld Sapphire member bring one guest into the lounge?",
+    "expected_tool": "retrieve_loyalty_benefits",
+    "expected_behavior": "grounded_answer",
+    "required_evidence_ids": ["sapphire_guest"]
+  },
+  {
+    "id": "general_train_poem_hard_negative",
+    "category": "general",
+    "query": "写一首关于火车旅行的四句小诗。",
+    "expected_tool": null,
+    "expected_behavior": "direct_answer"
+  },
+  {
+    "id": "general_points_math_hard_negative",
+    "category": "general",
+    "query": "积分在数学里是什么意思？",
+    "expected_tool": null,
+    "expected_behavior": "direct_answer"
+  },
+  {
+    "id": "general_currency_math",
+    "category": "general",
+    "query": "400 减去 50 等于多少？",
+    "expected_tool": null,
+    "expected_behavior": "direct_answer"
+  },
+  {
+    "id": "multiturn_partial_destination_correction",
+    "category": "multi_turn",
+    "turns": [
+      {
+        "query": "我从伦敦出发坐火车。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["destination", "travel_date"]
+      },
+      {
+        "query": "目的地是巴黎。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["travel_date"]
+      },
+      {
+        "query": "不对，目的地改成布鲁塞尔。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["travel_date"],
+        "expected_state": {"slots": {"destination": "布鲁塞尔"}, "provenance_turns": {"destination": 3}}
+      }
+    ]
+  },
+  {
+    "id": "multiturn_unsupported_destination",
+    "category": "multi_turn",
+    "turns": [
+      {
+        "query": "我想从伦敦坐火车出发。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["destination", "travel_date"]
+      },
+      {
+        "query": "去罗马，日期是{{DATE+54_CN}}。",
+        "expected_tool": "search_train",
+        "expected_behavior": "provider_abstain",
+        "expected_state": {"slots": {"origin": "伦敦", "destination": "罗马", "travel_date": "{{DATE+54}}"}}
+      }
+    ]
+  },
+  {
+    "id": "train_two_dates_requires_confirmation",
+    "category": "train",
+    "query": "我可能{{DATE+55_CN}}或{{DATE+56_CN}}从伦敦去巴黎，帮我查火车。",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_missing_fields": ["travel_date"]
+  },
+  {
+    "id": "switch_does_not_reuse_mileage_values",
+    "category": "task_switch",
+    "turns": [
+      {
+        "query": "20000 Avios，现金400英镑，税费50英镑，算兑换价值。",
+        "expected_tool": "calculate_mileage_value",
+        "expected_behavior": "tool_call"
+      },
+      {
+        "query": "你好。",
+        "expected_tool": null,
+        "expected_behavior": "direct_answer"
+      },
+      {
+        "query": "再算一次里程兑换。",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["miles_required", "cash_price", "taxes"]
+      }
+    ]
+  },
+  {
+    "id": "decision_complete_ba_silver",
+    "category": "decision",
+    "query": "{{DATE+45}}从伦敦去巴黎，现金票400英镑，奖励票20000 Avios加50英镑税费，我是BA Silver，应该怎么选？",
+    "expected_tools": ["search_train", "calculate_mileage_value", "retrieve_loyalty_benefits", "compose_travel_decision"],
+    "expected_behavior": "decision",
+    "expected_choice": "award_ticket",
+    "expected_pence_per_mile": 1.75,
+    "required_evidence_ids": ["redemption_formula_v1", "ba_silver_tier"],
+    "expected_state": {"current_task": "decision", "missing_fields": []}
+  },
+  {
+    "id": "decision_without_loyalty_context",
+    "category": "decision",
+    "query": "{{DATE+46}}从伦敦去巴黎，现金票400英镑，奖励票20000 Avios加50英镑税费，应该怎么选？",
+    "expected_tools": ["search_train", "calculate_mileage_value", "compose_travel_decision"],
+    "expected_behavior": "decision",
+    "expected_choice": "award_ticket",
+    "expected_pence_per_mile": 1.75
+  },
+  {
+    "id": "decision_cash_ticket_policy",
+    "category": "decision",
+    "query": "{{DATE+47}}从伦敦去巴黎，现金票200英镑，奖励票20000 Avios加50英镑税费，对比后推荐怎么选？",
+    "expected_tools": ["search_train", "calculate_mileage_value", "compose_travel_decision"],
+    "expected_behavior": "decision",
+    "expected_choice": "cash_ticket",
+    "expected_pence_per_mile": 0.75
+  },
+  {
+    "id": "decision_conditional_policy",
+    "category": "decision",
+    "query": "{{DATE+48}}从伦敦去巴黎，现金票300英镑，奖励票20000 Avios加50英镑税费，应该怎么选？",
+    "expected_tools": ["search_train", "calculate_mileage_value", "compose_travel_decision"],
+    "expected_behavior": "decision",
+    "expected_choice": "conditional",
+    "expected_pence_per_mile": 1.25
+  },
+  {
+    "id": "decision_missing_date",
+    "category": "decision",
+    "query": "从伦敦去巴黎，现金票400英镑，奖励票20000 Avios加50英镑税费，应该怎么选？",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_missing_fields": ["travel_date"],
+    "expected_state": {"current_task": "decision", "missing_fields": ["travel_date"]}
+  },
+  {
+    "id": "decision_missing_taxes",
+    "category": "decision",
+    "query": "{{DATE+49}}从伦敦去巴黎，现金票400英镑，奖励票20000 Avios，应该怎么选？",
+    "expected_tool": null,
+    "expected_behavior": "clarify",
+    "expected_missing_fields": ["taxes"],
+    "expected_state": {"current_task": "decision", "missing_fields": ["taxes"]}
+  },
+  {
+    "id": "decision_multiturn_completion",
+    "category": "decision",
+    "turns": [
+      {
+        "query": "从伦敦去巴黎，现金票400英镑，奖励票20000 Avios加50英镑税费，应该怎么选？",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "expected_missing_fields": ["travel_date"]
+      },
+      {
+        "query": "日期是{{DATE+50}}。",
+        "expected_tools": ["search_train", "calculate_mileage_value", "compose_travel_decision"],
+        "expected_behavior": "decision",
+        "expected_choice": "award_ticket",
+        "expected_pence_per_mile": 1.75,
+        "expected_state": {"current_task": "decision", "missing_fields": [], "provenance_turns": {"travel_date": 2}}
+      }
+    ]
+  },
+  {
+    "id": "decision_add_loyalty_context",
+    "category": "decision",
+    "turns": [
+      {
+        "query": "{{DATE+51}}从伦敦去巴黎，现金票400英镑，奖励票20000 Avios加50英镑税费，应该怎么选？",
+        "expected_tools": ["search_train", "calculate_mileage_value", "compose_travel_decision"],
+        "expected_behavior": "decision",
+        "expected_choice": "award_ticket"
+      },
+      {
+        "query": "补充：我是BA Silver，请把会员权益也考虑进去。",
+        "expected_tools": ["retrieve_loyalty_benefits", "compose_travel_decision"],
+        "expected_behavior": "decision",
+        "expected_choice": "award_ticket",
+        "required_evidence_ids": ["ba_silver_tier"]
+      }
+    ]
+  },
+  {
+    "id": "decision_update_cash_price",
+    "category": "decision",
+    "turns": [
+      {
+        "query": "{{DATE+52}}从伦敦去巴黎，现金票400英镑，奖励票20000 Avios加50英镑税费，应该怎么选？",
+        "expected_tools": ["search_train", "calculate_mileage_value", "compose_travel_decision"],
+        "expected_behavior": "decision",
+        "expected_choice": "award_ticket"
+      },
+      {
+        "query": "现金票价改成200英镑。",
+        "expected_tools": ["calculate_mileage_value", "compose_travel_decision"],
+        "expected_behavior": "decision",
+        "expected_choice": "cash_ticket",
+        "expected_pence_per_mile": 0.75,
+        "expected_state": {"slots": {"cash_price": 200.0}, "provenance_turns": {"cash_price": 2}}
+      }
+    ]
+  },
+  {
+    "id": "decision_update_destination",
+    "category": "decision",
+    "turns": [
+      {
+        "query": "{{DATE+53}}从伦敦去巴黎，现金票400英镑，奖励票20000 Avios加50英镑税费，应该怎么选？",
+        "expected_tools": ["search_train", "calculate_mileage_value", "compose_travel_decision"],
+        "expected_behavior": "decision",
+        "expected_choice": "award_ticket"
+      },
+      {
+        "query": "目的地改成布鲁塞尔。",
+        "expected_tools": ["search_train", "compose_travel_decision"],
+        "expected_behavior": "decision",
+        "expected_choice": "award_ticket",
+        "expected_state": {"slots": {"destination": "布鲁塞尔"}, "provenance_turns": {"destination": 2}}
+      }
+    ]
+  }
+]

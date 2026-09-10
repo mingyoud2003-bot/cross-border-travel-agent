@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: cross-border-travel-agent
+    runtime: docker
+    plan: 0.5c-512mb
+    region: singapore
+    numInstances: 1
+    autoDeployTrigger: checksPass
+    healthCheckPath: /ready
+    maxShutdownDelaySeconds: 60
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    disk:
+      name: travel-agent-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SESSION_DB_PATH
+        value: /data/travel-agent.db
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "20"

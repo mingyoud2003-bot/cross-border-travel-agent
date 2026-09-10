@@ -1,0 +1,136 @@
+{
+  "summary": {
+    "cases": 6,
+    "routing_passed": 6,
+    "routing_accuracy": 1.0,
+    "behavior_passed": 6,
+    "behavior_accuracy": 1.0,
+    "overall_passed": 6,
+    "overall_accuracy": 1.0,
+    "total_tokens": 11801
+  },
+  "results": [
+    {
+      "id": "train_complete",
+      "query": "我想2026年9月10日从伦敦去巴黎，请帮我查一下火车。",
+      "expected_tool": "search_train",
+      "expected_behavior": "tool_call",
+      "actual_tools": [
+        "search_train"
+      ],
+      "tool_statuses": [
+        "success"
+      ],
+      "final_output": "2026年9月10日伦敦前往巴黎的计划火车班次：\n\n- **06:01** St Pancras International → **09:26** Paris-Nord  \n  Eurostar，直达，约145分钟\n- **07:04** St Pancras International → **10:29** Paris-Nord  \n  Eurostar，直达，约145分钟\n\n以上为计划时刻，并非实时运行状态。当前数据源不提供票价。",
+      "route_pass": true,
+      "behavior_pass": true,
+      "pass": true,
+      "usage": {
+        "requests": 2,
+        "input_tokens": 2322,
+        "output_tokens": 138,
+        "total_tokens": 2460
+      }
+    },
+    {
+      "id": "train_missing_date",
+      "query": "我想从伦敦去巴黎，帮我查一下火车。",
+      "expected_tool": null,
+      "expected_behavior": "clarify",
+      "actual_tools": [],
+      "tool_statuses": [],
+      "final_output": "请提供具体的出发日期（YYYY-MM-DD）。",
+      "route_pass": true,
+      "behavior_pass": true,
+      "pass": true,
+      "usage": {
+        "requests": 1,
+        "input_tokens": 1033,
+        "output_tokens": 16,
+        "total_tokens": 1049
+      }
+    },
+    {
+      "id": "mileage_value",
+      "query": "一张票现金400英镑，税费50英镑，需要20000 Avios，这次兑换价值是多少？",
+      "expected_tool": "calculate_mileage_value",
+      "expected_behavior": "tool_call",
+      "actual_tools": [
+        "calculate_mileage_value"
+      ],
+      "tool_statuses": [],
+      "final_output": "这次兑换价值为 **1.75 便士/Avios**。\n\n计算：\\((400-50) ÷ 20,000 = £0.0175\\)。",
+      "route_pass": true,
+      "behavior_pass": true,
+      "pass": true,
+      "usage": {
+        "requests": 2,
+        "input_tokens": 2147,
+        "output_tokens": 76,
+        "total_tokens": 2223
+      }
+    },
+    {
+      "id": "loyalty_supported",
+      "query": "我是 BA Silver，乘坐 Qatar Airways 经济舱可以进入休息室吗？",
+      "expected_tool": "retrieve_loyalty_benefits",
+      "expected_behavior": "grounded_answer",
+      "actual_tools": [
+        "retrieve_loyalty_benefits"
+      ],
+      "tool_statuses": [
+        "success"
+      ],
+      "final_output": "可以。BA Silver 对应 oneworld Sapphire；乘坐由 Qatar Airways 承运的经济舱航班时，通常可使用符合条件的商务舱或常旅客休息室。航班需由 oneworld 成员营销并承运，并可能受机场规定及容量限制。\n\n来源：British Airways、oneworld  \nhttps://www.britishairways.com/content/information/partners-and-alliances/oneworld/frequent-flyer-benefits  \nhttps://www.oneworld.com/airport-lounges",
+      "route_pass": true,
+      "behavior_pass": true,
+      "pass": true,
+      "usage": {
+        "requests": 2,
+        "input_tokens": 2520,
+        "output_tokens": 181,
+        "total_tokens": 2701
+      }
+    },
+    {
+      "id": "loyalty_out_of_scope",
+      "query": "我是 Lufthansa Senator，坐新加坡航空可以进入休息室吗？",
+      "expected_tool": "retrieve_loyalty_benefits",
+      "expected_behavior": "knowledge_abstain",
+      "actual_tools": [
+        "retrieve_loyalty_benefits"
+      ],
+      "tool_statuses": [
+        "out_of_scope"
+      ],
+      "final_output": "当前知识库未覆盖 Lufthansa Senator、新加坡航空或相关联盟，因此无法确认是否可以进入休息室。",
+      "route_pass": true,
+      "behavior_pass": true,
+      "pass": true,
+      "usage": {
+        "requests": 2,
+        "input_tokens": 2184,
+        "output_tokens": 75,
+        "total_tokens": 2259
+      }
+    },
+    {
+      "id": "general_noise",
+      "query": "你好，你能做什么？",
+      "expected_tool": null,
+      "expected_behavior": "direct_answer",
+      "actual_tools": [],
+      "tool_statuses": [],
+      "final_output": "你好！我可以帮你：\n\n- 规划跨国旅行路线\n- 查询城市间火车班次（需要出发地、目的地和具体日期）\n- 计算航空里程兑换是否划算（需要里程、现金票价和税费）\n- 查询常旅客会员等级、航空联盟及休息室等权益\n\n请告诉我你的旅行需求。",
+      "route_pass": true,
+      "behavior_pass": true,
+      "pass": true,
+      "usage": {
+        "requests": 1,
+        "input_tokens": 1024,
+        "output_tokens": 85,
+        "total_tokens": 1109
+      }
+    }
+  ]
+}

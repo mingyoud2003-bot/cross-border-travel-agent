@@ -1,0 +1,138 @@
+from fastapi.testclient import TestClient
+
+from app import create_app
+from state import TravelState
+
+
+class FakeService:
+    def __init__(self) -> None:
+        self.session_id = "a" * 32
+        self.state = TravelState()
+
+    def create_session(self):
+        return {
+            "session_id": self.session_id,
+            "created_at": "2026-09-09T00:00:00+00:00",
+            "state": self.state.snapshot(),
+            "traces": [],
+        }
+
+    def get_session(self, session_id):
+        assert session_id == self.session_id
+        return self.create_session()
+
+    def delete_session(self, session_id):
+        return session_id == self.session_id
+
+    def ready(self):
+        return True
+
+    async def chat(self, message, session_id=None, request_id=None):
+        self.state.begin_turn(message)
+        return {
+            "request_id": request_id or "b" * 32,
+            "session_id": session_id or self.session_id,
+            "answer_type": "text",
+            "message": "测试回答",
+            "decision": None,
+            "state": self.state.snapshot(),
+            "trace": {
+                "request_id": "b" * 32,
+                "created_at": "2026-09-09T00:00:01+00:00",
+                "duration_ms": 10,
+                "task": self.state.current_task,
+                "tools": [],
+                "usage": {"requests": 1, "input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
+            },
+        }
+
+
+def client() -> TestClient:
+    return TestClient(create_app(FakeService()))
+
+
+def test_health_endpoint_exposes_readiness_without_secret():
+    response = client().get("/health")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["model"] == "gpt-5.6-luna"
+    assert "OPENAI_API_KEY" not in response.text
+
+
+def test_session_and_chat_contract():
+    api = client()
+    created = api.post("/api/sessions")
+    session_id = created.json()["session_id"]
+    response = api.post(
+        "/api/chat",
+        json={"session_id": session_id, "message": "你好"},
+    )
+
+    assert created.status_code == 201
+    assert response.status_code == 200
+    assert response.json()["message"] == "测试回答"
+    assert response.json()["state"]["turn_id"] == 1
+    assert response.headers["x-request-id"] == response.json()["request_id"]
+
+
+def test_chat_rejects_blank_or_oversized_input():
+    api = client()
+
+    assert api.post("/api/chat", json={"message": "   "}).status_code == 422
+    assert api.post("/api/chat", json={"message": "x" * 4001}).status_code == 422
+
+
+def test_web_ui_and_static_assets_are_served():
+    api = client()
+
+    page = api.get("/")
+    script = api.get("/static/app.js")
+
+    assert page.status_code == 200
+    assert "Travel Decision Agent" in page.text
+    assert script.status_code == 200
+    assert "renderDecision" in script.text
+
+
+def test_readiness_checks_database_and_key(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key-not-used")
+    response = client().get("/ready")
+
+    assert response.status_code == 200
+    assert response.json()["database"] == "ready"
+
+
+def test_readiness_fails_without_api_key(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+
+    response = client().get("/ready")
+
+    assert response.status_code == 503
+
+
+def test_chat_rate_limit_returns_retry_after(monkeypatch):
+    monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "1")
+    api = TestClient(create_app(FakeService()))
+
+    first = api.post("/api/chat", json={"message": "first"})
+    second = api.post("/api/chat", json={"message": "second"})
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert int(second.headers["retry-after"]) >= 1
+
+
+def test_security_headers_and_request_metrics_are_exposed():
+    api = client()
+
+    health = api.get("/health")
+    metrics = api.get("/metrics")
+
+    assert health.headers["x-content-type-options"] == "nosniff"
+    assert health.headers["x-frame-options"] == "DENY"
+    assert "frame-ancestors 'none'" in health.headers["content-security-policy"]
+    assert metrics.status_code == 200
+    assert 'travel_agent_http_requests_total{method="GET",route="/health",status="200"} 1' in metrics.text
+    assert "session_id" not in metrics.text

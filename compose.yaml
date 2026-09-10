@@ -1,0 +1,16 @@
+services:
+  travel-agent:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.local
+    environment:
+      SESSION_DB_PATH: /data/travel-agent.db
+      RATE_LIMIT_PER_MINUTE: "20"
+    volumes:
+      - travel-agent-data:/data
+    restart: unless-stopped
+
+volumes:
+  travel-agent-data:
