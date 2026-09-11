@@ -7,7 +7,6 @@ services:
     numInstances: 1
     autoDeployTrigger: checksPass
     healthCheckPath: /ready
-    maxShutdownDelaySeconds: 60
     dockerfilePath: ./Dockerfile
     dockerContext: .
     disk:
