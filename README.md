@@ -123,11 +123,11 @@ CI 不读取线上密钥，也不会产生模型费用。
 
 ## Deploy to Render
 
-仓库提供 `render.yaml` Blueprint：使用 Docker 部署到新加坡区域，以 `/ready`
-作为健康检查，并把 SQLite 会话数据写入 1 GB 持久盘。由于 Render 持久盘需要
-付费实例，创建资源前必须在控制台确认当时的月费；`OPENAI_API_KEY` 只通过
-Render 的 secret 输入，不写入仓库。完整操作、验证和回滚步骤见
-[Deployment guide](docs/DEPLOYMENT.md)。
+默认 `render.yaml` Blueprint 使用 Render 免费 Web Service 部署到新加坡区域，
+以 `/ready` 作为健康检查，并通过 secret 注入 `OPENAI_API_KEY`。免费实例休眠、
+重启或重新部署后会丢失临时 SQLite 会话；`render.paid.yaml` 保留单实例加 1 GB
+持久盘的生产形态。Render 免费计算不包含 OpenAI API 调用费用。完整操作、限制、
+验证和回滚步骤见 [Deployment guide](docs/DEPLOYMENT.md)。
 
 无需调用模型的并发验证：
 
@@ -157,7 +157,8 @@ docs/                              prompt contract and generated PNG diagrams
 .github/workflows/ci.yml           offline CI quality gate
 Dockerfile                         non-root reproducible deployment image
 compose.yaml                       persistent single-worker local deployment
-render.yaml                        paid single-instance Render Blueprint
+render.yaml                        free Render portfolio Blueprint
+render.paid.yaml                   paid persistent deployment reference
 scripts/load_test.py               cost-gated concurrency benchmark
 ```
 
