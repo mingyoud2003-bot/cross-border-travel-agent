@@ -151,6 +151,9 @@ function renderTrace(trace) {
     const metric = node("div", "trace-metric"); metric.append(node("strong", "", String(value)), node("span", "", label)); summary.append(metric);
   });
   ui.trace.append(summary);
+  if (trace.control_reason) {
+    ui.trace.append(node("p", "provenance", `Deterministic control · ${trace.control_reason}`));
+  }
   if (!trace.tools.length) ui.trace.append(node("p", "provenance", "No business tool was called."));
   trace.tools.forEach((tool, index) => {
     const step = node("div", "trace-step");

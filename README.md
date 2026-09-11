@@ -31,6 +31,8 @@ flowchart LR
 
 - Typed multi-turn state：业务状态与对话历史分离；支持参数补充、修改和任务切换。
 - Parameter provenance：每个可执行参数记录用户原文、轮次和所属任务。
+- Deterministic turn control：缺失参数、确认/否认、冲突与数据源越界在模型前处理，
+  避免确认循环和无效 token/工具消耗。
 - Dynamic tool gating：缺失、非法或无用户来源的参数不能授权工具调用。
 - Tool input guardrails：拒绝模型替换城市、日期、票价、里程或税费。
 - Grounded loyalty RAG：只基于返回证据作答，并保留 evidence ID 与官方 URL。
@@ -80,8 +82,8 @@ python evals/run_agent_eval.py --category decision
 python evals/run_agent_eval.py --all
 ```
 
-当前确定性测试为 94/94。最终控制层版本的完整真实 Agent Eval 覆盖 100 个
-case、133 个对话轮次，100/100 通过；工具路由、行为契约、structured state /
+当前确定性测试为 107/107。最终控制层版本的完整真实 Agent Eval 覆盖 100 个
+case、136 个对话轮次，100/100 通过；工具路由、行为契约、structured state /
 provenance 与输出契约四项指标均为 100%，基础设施失败经同版本断点重试后为 0。
 其中综合决策专项为 10/10。详见 [评测报告](evals/REPORT.md)。本地单 worker、
 SQLite session 生命周期压测在 200 次请求、并发 20 下为 200/200 成功，吞吐
@@ -118,7 +120,7 @@ docker run --rm -p 8000:8000 \
 
 容器以非 root 用户运行，named volume 保存 SQLite 数据。当前限流器是面向单 worker
 部署的进程内保护；横向扩容时应替换为 Redis/API Gateway 限流。GitHub Actions 在
-每次 push/PR 执行 94 项测试、Eval 数据集静态校验、Python 编译检查和 Docker 构建；
+每次 push/PR 执行 107 项测试、Eval 数据集静态校验、Python 编译检查和 Docker 构建；
 CI 不读取线上密钥，也不会产生模型费用。
 
 ## Deploy to Render
@@ -145,6 +147,7 @@ python scripts/load_test.py --target session --requests 200 --concurrency 20
 
 ```text
 agent.py / tools.py / state.py     Agent reliability core
+turn_controller.py                 deterministic turn-level control
 decision_service.py                deterministic recommendation composer
 agent_service.py                   persistent sessions, rollback and trace
 app.py / api_models.py             FastAPI application contract

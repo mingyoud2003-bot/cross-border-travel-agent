@@ -17,6 +17,8 @@ AgentService -- session lock, rollback, trace, persistence
         |
 TravelState -- confirmed values, provenance, pending workflow edge
         |
+Turn controller -- clarification, confirmation, scope boundary
+        |
 Agents SDK loop -- dynamically enabled tools, required tool control
         |
 Transitous | calculator | grounded loyalty retrieval | decision composer
@@ -32,6 +34,8 @@ Transitous | calculator | grounded loyalty retrieval | decision composer
 6. Knowledge answers require returned evidence; provider failure becomes a visible
    limitation rather than an invitation to guess.
 7. Model/API failure rolls back the business state for that turn.
+8. Missing, conflicting, confirmation, and provider-scope turns terminate before
+   the model loop and never authorize a tool call.
 
 ## Key decisions
 

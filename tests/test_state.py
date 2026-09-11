@@ -237,3 +237,35 @@ def test_incomplete_decision_does_not_force_tool_choice():
     state.begin_turn("从伦敦去巴黎，现金票400英镑，奖励票20000 Avios，应该怎么选？")
 
     assert run_config_for(state) is None
+
+
+def test_actionable_train_forces_required_tool_choice():
+    state = TravelState()
+    state.begin_turn(f"{future_date()}从伦敦到巴黎的火车")
+
+    config = run_config_for(state)
+
+    assert config is not None
+    assert config.model_settings.tool_choice == "required"
+
+
+def test_arrow_route_does_not_capture_leading_date_as_origin():
+    state = TravelState()
+
+    state.begin_turn("2026年10月12日柏林→科隆的火车。")
+
+    assert state.value("origin") == "柏林"
+    assert state.value("destination") == "科隆"
+    assert state.value("travel_date") == "2026-10-12"
+
+
+def test_train_command_is_not_captured_as_standalone_city():
+    state = TravelState()
+    state.begin_turn("20000 Avios，现金400英镑，税费50英镑，算兑换价值。")
+
+    state.begin_turn("再帮我查火车。")
+
+    assert state.current_task == "train"
+    assert state.missing_fields() == ["origin", "destination", "travel_date"]
+    assert state.value("origin") is None
+    assert state.value("destination") is None

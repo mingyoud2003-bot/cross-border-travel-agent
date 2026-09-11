@@ -16,11 +16,12 @@ from uuid import uuid4
 from agents import Runner, SQLiteSession
 from openai import APIConnectionError, APIError, RateLimitError
 
-from agent import run_config_for, travel_agent
+from agent import agent_for_state, run_config_for, travel_agent
 from metrics import MetricsRegistry
 from observability import tool_timeline, usage_snapshot
 from settings import session_db_path
 from state import TravelState
+from turn_controller import ControlledTurn, controlled_turn_for
 
 
 RunFunction = Callable[..., Awaitable[Any]]
@@ -307,9 +308,18 @@ class AgentService:
             rollback_state = copy.deepcopy(record.state)
             state_before = rollback_state.snapshot()
             record.state.begin_turn(message)
+            controlled = controlled_turn_for(record.state)
+            if controlled:
+                return self._complete_controlled_turn(
+                    record,
+                    controlled,
+                    state_before=state_before,
+                    request_id=request_id,
+                    started=started,
+                )
             try:
                 result = await self._run_agent(
-                    travel_agent,
+                    agent_for_state(record.state),
                     message,
                     session=record.memory,
                     context=record.state,
@@ -363,6 +373,53 @@ class AgentService:
                 "trace": _public_trace(trace),
             }
 
+    def _complete_controlled_turn(
+        self,
+        record: SessionRecord,
+        controlled: ControlledTurn,
+        *,
+        state_before: dict[str, Any],
+        request_id: str,
+        started: float,
+    ) -> dict[str, Any]:
+        duration_ms = round((time.perf_counter() - started) * 1000)
+        usage = {
+            "requests": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+        }
+        trace = {
+            "request_id": request_id,
+            "created_at": datetime.now(UTC).isoformat(),
+            "duration_ms": duration_ms,
+            "task": record.state.current_task,
+            "control_reason": controlled.reason,
+            "tools": [],
+            "usage": usage,
+            "state_before": state_before,
+            "state_after": record.state.snapshot(),
+        }
+        record.traces.append(trace)
+        record.last_accessed_at = datetime.now(UTC)
+        self.store.save(record, trace)
+        if self.metrics:
+            self.metrics.observe_agent(
+                task=record.state.current_task,
+                status="controlled",
+                duration_seconds=duration_ms / 1000,
+                usage=usage,
+            )
+        return {
+            "request_id": request_id,
+            "session_id": record.id,
+            "answer_type": "text",
+            "message": controlled.message,
+            "decision": None,
+            "state": record.state.snapshot(),
+            "trace": _public_trace(trace),
+        }
+
     def _observe_failure(self, task: str, started: float, status: str) -> None:
         if self.metrics:
             self.metrics.observe_agent(
@@ -392,7 +449,10 @@ def _parse_decision(output: str) -> dict[str, Any] | None:
 
 
 def _public_trace(trace: dict[str, Any]) -> dict[str, Any]:
-    return {
+    public = {
         key: trace[key]
         for key in ("request_id", "created_at", "duration_ms", "task", "tools", "usage")
     }
+    if "control_reason" in trace:
+        public["control_reason"] = trace["control_reason"]
+    return public

@@ -114,45 +114,47 @@
     ]
   },
   {
-    "id": "train_unsupported_destination_rome",
+    "id": "train_unsupported_unrecognized_route",
     "category": "train",
-    "query": "我想{{DATE+30_CN}}从伦敦去罗马，请帮我查火车。",
-    "expected_tool": "search_train",
-    "expected_behavior": "provider_abstain"
+    "query": "请查{{DATE+30_CN}}从伦武汉到驻马店的火车。",
+    "expected_tool": null,
+    "expected_behavior": "provider_abstain",
+    "expected_state": {"slots": {"origin": "伦武汉", "destination": "驻马店", "travel_date": "{{DATE+30}}"}}
   },
   {
-    "id": "train_unsupported_destination_berlin",
+    "id": "train_unsupported_arrow_route",
     "category": "train",
-    "query": "帮我查{{DATE+31_CN}}从巴黎去柏林的火车。",
-    "expected_tool": "search_train",
-    "expected_behavior": "provider_abstain"
+    "query": "{{DATE+31_CN}}柏林→科隆的火车。",
+    "expected_tool": null,
+    "expected_behavior": "provider_abstain",
+    "expected_state": {"slots": {"origin": "柏林", "destination": "科隆", "travel_date": "{{DATE+31}}"}}
   },
   {
     "id": "train_unsupported_destination_madrid",
     "category": "train",
     "query": "{{DATE+33_CN}}伦敦到马德里火车怎么坐？",
-    "expected_tool": "search_train",
+    "expected_tool": null,
     "expected_behavior": "provider_abstain"
   },
   {
     "id": "train_unsupported_origin_rome",
     "category": "train",
     "query": "{{DATE+34_CN}}从罗马去巴黎，帮我查火车。",
-    "expected_tool": "search_train",
+    "expected_tool": null,
     "expected_behavior": "provider_abstain"
   },
   {
     "id": "train_unsupported_origin_berlin",
     "category": "train",
     "query": "请查{{DATE+37_CN}}从柏林到伦敦的火车。",
-    "expected_tool": "search_train",
+    "expected_tool": null,
     "expected_behavior": "provider_abstain"
   },
   {
     "id": "train_unsupported_destination_milan",
     "category": "train",
     "query": "{{DATE+39_CN}}从布鲁塞尔去米兰有火车吗？",
-    "expected_tool": "search_train",
+    "expected_tool": null,
     "expected_behavior": "provider_abstain"
   },
   {
@@ -1010,16 +1012,52 @@
     "category": "multi_turn",
     "turns": [
       {
-        "query": "我想从伦敦坐火车出发。",
+        "query": "请查{{DATE+54}}从伦武汉到驻马店的火车。",
         "expected_tool": null,
-        "expected_behavior": "clarify",
-        "expected_missing_fields": ["destination", "travel_date"]
+        "expected_behavior": "provider_abstain",
+        "expected_state": {
+          "current_task": "train",
+          "slots": {"origin": "伦武汉", "destination": "驻马店", "travel_date": "{{DATE+54}}"}
+        }
       },
       {
-        "query": "去罗马，日期是{{DATE+54_CN}}。",
-        "expected_tool": "search_train",
+        "query": "武汉",
+        "expected_tool": null,
+        "expected_behavior": "clarify",
+        "required_output_terms": ["确认", "出发城市", "武汉"],
+        "expected_state": {
+          "current_task": "train",
+          "pending_confirmation": {"field": "origin", "value": "武汉", "source_turn_id": 2}
+        }
+      },
+      {
+        "query": "是的",
+        "expected_tool": null,
         "expected_behavior": "provider_abstain",
-        "expected_state": {"slots": {"origin": "伦敦", "destination": "罗马", "travel_date": "{{DATE+54}}"}}
+        "expected_state": {
+          "current_task": "train",
+          "slots": {"origin": "武汉", "destination": "驻马店", "travel_date": "{{DATE+54}}"},
+          "provenance_turns": {"origin": 2, "destination": 1, "travel_date": 1}
+        }
+      },
+      {
+        "query": "请查{{DATE+55}}从柏林到科隆的火车。",
+        "expected_tool": null,
+        "expected_behavior": "provider_abstain",
+        "expected_state": {
+          "current_task": "train",
+          "slots": {"origin": "柏林", "destination": "科隆", "travel_date": "{{DATE+55}}"}
+        }
+      },
+      {
+        "query": "更改为伦敦→巴黎",
+        "expected_tool": "search_train",
+        "expected_behavior": "tool_call",
+        "expected_state": {
+          "current_task": "train",
+          "slots": {"origin": "伦敦", "destination": "巴黎", "travel_date": "{{DATE+55}}"},
+          "provenance_turns": {"origin": 5, "destination": 5, "travel_date": 4}
+        }
       }
     ]
   },

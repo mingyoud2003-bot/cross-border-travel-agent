@@ -7,6 +7,7 @@ from typing import Any, Literal
 
 
 TaskType = Literal["train", "mileage", "loyalty", "decision", "general"]
+ConfirmationField = Literal["origin", "destination"]
 
 
 CITY_ALIASES = {
@@ -50,6 +51,10 @@ LOYALTY_TERMS = (
     "ba gold",
 )
 
+AFFIRMATIVE_TERMS = {"是", "是的", "对", "对的", "确认", "没错", "正确", "yes", "y"}
+NEGATIVE_TERMS = {"不是", "不对", "否", "取消", "no", "n"}
+GENERAL_CHAT_TERMS = {"你好", "您好", "谢谢", "再见", "帮助", "help", "hello", "hi"}
+
 
 @dataclass(frozen=True)
 class SlotProvenance:
@@ -72,6 +77,16 @@ class StateEvent:
     new_value: Any = None
 
 
+@dataclass(frozen=True)
+class PendingConfirmation:
+    """A value-bearing user turn awaiting an explicit yes/no answer."""
+
+    field: ConfirmationField
+    value: str
+    source_turn_id: int
+    source_text: str
+
+
 @dataclass
 class TravelState:
     """User-grounded state for one conversation.
@@ -89,6 +104,8 @@ class TravelState:
     tool_results: dict[str, dict[str, Any]] = field(default_factory=dict)
     decision_user_messages: list[str] = field(default_factory=list)
     loyalty_requested: bool = False
+    pending_confirmation: PendingConfirmation | None = None
+    control_message: str | None = None
 
     TRAIN_FIELDS = ("origin", "destination", "travel_date")
     MILEAGE_FIELDS = ("miles_required", "cash_price", "taxes")
@@ -133,9 +150,13 @@ class TravelState:
     def begin_turn(self, message: str) -> None:
         self.turn_id += 1
         self.current_user_message = message.strip()
+        self.control_message = None
 
         detected_task = detect_task(self.current_user_message, self.current_task)
         self._transition_to(detected_task)
+
+        if self._resolve_pending_confirmation(self.current_user_message):
+            return
 
         if self.current_task == "train":
             self._capture_train_slots(self.current_user_message)
@@ -163,6 +184,7 @@ class TravelState:
 
         self.previous_task = self.current_task
         self.current_task = new_task
+        self.pending_confirmation = None
 
         # Returning to a task begins a fresh task instance. This prevents values
         # from an older request from silently authorizing a later tool call.
@@ -187,7 +209,14 @@ class TravelState:
             return cls.DECISION_FIELDS
         return ()
 
-    def set_confirmed(self, field_name: str, value: Any) -> None:
+    def set_confirmed(
+        self,
+        field_name: str,
+        value: Any,
+        *,
+        source_turn_id: int | None = None,
+        source_text: str | None = None,
+    ) -> None:
         previous = self.slots.get(field_name)
         event = "slot_updated" if previous and previous.value != value else "slot_set"
         if previous is None or previous.value != value:
@@ -195,8 +224,8 @@ class TravelState:
         self.slots[field_name] = SlotProvenance(
             value=value,
             source="user",
-            turn_id=self.turn_id,
-            source_text=self.current_user_message,
+            turn_id=source_turn_id or self.turn_id,
+            source_text=source_text or self.current_user_message,
             task=self.current_task,
         )
         self.events.append(
@@ -236,9 +265,27 @@ class TravelState:
         return self.current_task == "decision" and required.issubset(self.tool_results)
 
     def _capture_train_slots(self, message: str) -> None:
+        explicit_route = extract_explicit_route(message)
+        if explicit_route:
+            origin, destination = explicit_route
+            self.set_confirmed("origin", origin)
+            self.set_confirmed("destination", destination)
+            self.pending_confirmation = None
+
+        labeled_origin = extract_labeled_city(message, "origin")
+        labeled_destination = extract_labeled_city(message, "destination")
+        if labeled_origin:
+            self.set_confirmed("origin", labeled_origin)
+            self.pending_confirmation = None
+        if labeled_destination:
+            self.set_confirmed("destination", labeled_destination)
+            self.pending_confirmation = None
+
         city_mentions = extract_city_mentions(message)
 
-        if len(city_mentions) >= 2:
+        if explicit_route or labeled_origin or labeled_destination:
+            pass
+        elif len(city_mentions) >= 2:
             self.set_confirmed("origin", city_mentions[0][1])
             self.set_confirmed("destination", city_mentions[1][1])
         elif len(city_mentions) == 1:
@@ -260,9 +307,70 @@ class TravelState:
             elif self.destination is None:
                 self.set_confirmed("destination", city)
 
+        if not explicit_route and not labeled_origin and not labeled_destination and not city_mentions:
+            standalone = extract_standalone_city(message)
+            if standalone:
+                self._capture_standalone_city(standalone)
+
         explicit_dates = extract_explicit_dates(message)
         if len(explicit_dates) == 1:
             self.set_confirmed("travel_date", next(iter(explicit_dates)))
+
+    def _capture_standalone_city(self, city: str) -> None:
+        missing = [name for name in ("origin", "destination") if self.value(name) is None]
+        if len(missing) == 1:
+            self.set_confirmed(missing[0], city)
+            return
+        if len(missing) == 2:
+            self.control_message = (
+                f"请明确“{city}”是出发城市还是目的城市，例如“出发地是{city}”。"
+            )
+            return
+
+        matches_origin = _city_values_overlap(city, self.origin)
+        matches_destination = _city_values_overlap(city, self.destination)
+        if matches_origin != matches_destination:
+            target: ConfirmationField = "origin" if matches_origin else "destination"
+            self.pending_confirmation = PendingConfirmation(
+                field=target,
+                value=city,
+                source_turn_id=self.turn_id,
+                source_text=self.current_user_message,
+            )
+            return
+        self.control_message = (
+            f"请明确要把出发城市还是目的城市改为“{city}”，例如“目的地改为{city}”。"
+        )
+
+    def _resolve_pending_confirmation(self, message: str) -> bool:
+        normalized = _normalize_short_answer(message)
+        affirmative = normalized in AFFIRMATIVE_TERMS
+        negative = normalized in NEGATIVE_TERMS
+        if not affirmative and not negative:
+            return False
+
+        pending = self.pending_confirmation
+        if pending is None:
+            if self.current_task in {"train", "mileage", "decision"}:
+                self.control_message = (
+                    "当前没有待确认的候选值，请直接提供要修改的字段和值。"
+                )
+                return True
+            return False
+
+        self.pending_confirmation = None
+        label = "出发城市" if pending.field == "origin" else "目的城市"
+        if negative:
+            self.control_message = f"已取消将{label}改为“{pending.value}”，请直接提供正确值。"
+            return True
+
+        self.set_confirmed(
+            pending.field,
+            pending.value,
+            source_turn_id=pending.source_turn_id,
+            source_text=pending.source_text,
+        )
+        return True
 
     def _capture_mileage_slots(self, message: str) -> None:
         normalized = message.casefold().replace(",", "")
@@ -318,6 +426,8 @@ class TravelState:
             return []
         errors: list[str] = []
         if active_task in {"train", "decision"}:
+            if self.origin == self.destination:
+                errors.append("出发城市和目的城市不能相同")
             try:
                 parsed_date = date.fromisoformat(str(self.travel_date))
             except ValueError:
@@ -425,6 +535,9 @@ class TravelState:
             "events": [asdict(event) for event in self.events],
             "tool_results": self.tool_results,
             "loyalty_requested": self.loyalty_requested,
+            "pending_confirmation": (
+                asdict(self.pending_confirmation) if self.pending_confirmation else None
+            ),
         }
 
     def to_persistence_dict(self) -> dict[str, Any]:
@@ -440,12 +553,16 @@ class TravelState:
             "tool_results": self.tool_results,
             "decision_user_messages": self.decision_user_messages,
             "loyalty_requested": self.loyalty_requested,
+            "pending_confirmation": (
+                asdict(self.pending_confirmation) if self.pending_confirmation else None
+            ),
         }
 
     @classmethod
     def from_persistence_dict(cls, payload: dict[str, Any]) -> "TravelState":
         """Restore trusted application-owned state from SQLite."""
 
+        pending = payload.get("pending_confirmation")
         return cls(
             current_task=payload.get("current_task", "general"),
             previous_task=payload.get("previous_task"),
@@ -459,11 +576,14 @@ class TravelState:
             tool_results=payload.get("tool_results", {}),
             decision_user_messages=payload.get("decision_user_messages", []),
             loyalty_requested=bool(payload.get("loyalty_requested", False)),
+            pending_confirmation=(PendingConfirmation(**pending) if pending else None),
         )
 
 
 def detect_task(message: str, current_task: TaskType = "general") -> TaskType:
     normalized = message.casefold()
+    if _normalize_short_answer(message) in GENERAL_CHAT_TERMS:
+        return "general"
     if any(term in normalized for term in ("写一首", "小诗", "写诗", "故事")):
         return "general"
     if "积分" in normalized and any(
@@ -475,7 +595,7 @@ def detect_task(message: str, current_task: TaskType = "general") -> TaskType:
         "mileage": sum(term in normalized for term in MILEAGE_TERMS),
         "loyalty": sum(term in normalized for term in LOYALTY_TERMS),
     }
-    has_route = len(extract_city_mentions(message)) >= 2
+    has_route = bool(extract_explicit_route(message)) or len(extract_city_mentions(message)) >= 2
     comparison_intent = any(
         term in normalized
         for term in ("怎么选", "选哪个", "应该选", "推荐", "比较", "对比", "现金还是")
@@ -498,6 +618,15 @@ def detect_task(message: str, current_task: TaskType = "general") -> TaskType:
 
     # Short answers and corrections belong to the active structured task.
     if current_task in {"train", "mileage", "decision"}:
+        if _normalize_short_answer(message) in AFFIRMATIVE_TERMS | NEGATIVE_TERMS:
+            return current_task
+        if current_task in {"train", "decision"} and (
+            extract_explicit_route(message)
+            or extract_labeled_city(message, "origin")
+            or extract_labeled_city(message, "destination")
+            or extract_standalone_city(message)
+        ):
+            return current_task
         if extract_city_mentions(message) or extract_explicit_dates(message):
             return current_task
         if re.search(r"\d", normalized) or any(
@@ -544,6 +673,97 @@ def extract_city_mentions(message: str) -> list[tuple[str, str, int, int]]:
             mentions.append((message[span[0] : span[1]], canonical, span[0], span[1]))
             occupied.append(span)
     return sorted(mentions, key=lambda item: item[2])
+
+
+def extract_explicit_route(message: str) -> tuple[str, str] | None:
+    """Extract user-authored city text only when a route relation is explicit."""
+
+    patterns = (
+        r"(?:从|由)\s*([^，。！？,!?]{1,40}?)\s*(?:到|去|前往)\s*([^，。！？,!?]{1,40}?)(?=(?:有|坐|乘坐|搭乘)?(?:的)?(?:火车|铁路|列车)|[，。！？,.!?]|$)",
+        r"([^，。！？,!?]{1,40}?)\s*(?:→|->|⇒)\s*([^，。！？,!?]{1,40})",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, message, flags=re.IGNORECASE)
+        if not match:
+            continue
+        origin = _clean_city_candidate(match.group(1))
+        destination = _clean_city_candidate(match.group(2))
+        if origin and destination:
+            return canonicalize_city(origin), canonicalize_city(destination)
+    return None
+
+
+def extract_labeled_city(message: str, field_name: ConfirmationField) -> str | None:
+    labels = (
+        r"(?:出发城市|出发地|起点)"
+        if field_name == "origin"
+        else r"(?:目的城市|目标城市|目的地|终点)"
+    )
+    pattern = rf"{labels}\s*(?:改成|改为|是|为|[:：])?\s*([\u4e00-\u9fff]{{2,12}}|[A-Za-z][A-Za-z .'-]{{1,30}})"
+    match = re.search(pattern, message, flags=re.IGNORECASE)
+    if not match:
+        return None
+    candidate = _clean_city_candidate(match.group(1))
+    return canonicalize_city(candidate) if candidate else None
+
+
+def extract_standalone_city(message: str) -> str | None:
+    candidate = message.strip().strip("'\"“”‘’。，,!?！？ ")
+    # A short command can look like an unknown Chinese city to the generic
+    # fallback. Keep action/query phrases out of slot memory.
+    if any(
+        term in candidate.casefold()
+        for term in (
+            "火车",
+            "铁路",
+            "列车",
+            "查询",
+            "帮我查",
+            "再帮我",
+            "train",
+            "rail",
+            "search",
+        )
+    ):
+        return None
+    if re.fullmatch(r"[\u4e00-\u9fff]{2,12}", candidate) or re.fullmatch(
+        r"[A-Za-z][A-Za-z .'-]{1,30}", candidate
+    ):
+        if _normalize_short_answer(candidate) not in AFFIRMATIVE_TERMS | NEGATIVE_TERMS:
+            return canonicalize_city(candidate)
+    return None
+
+
+def canonicalize_city(value: str) -> str:
+    normalized = value.casefold().strip()
+    for canonical, aliases in CITY_ALIASES.items():
+        if normalized in {alias.casefold() for alias in aliases}:
+            return canonical
+    return value.strip()
+
+
+def _clean_city_candidate(value: str) -> str:
+    cleaned = value.strip().strip("'\"“”‘’ ")
+    cleaned = re.sub(
+        r"^(?:\d{4}[-/年]\d{1,2}[-/月]\d{1,2}(?:日)?|\d{1,2}月\d{1,2}日)[\s，,]*",
+        "",
+        cleaned,
+    )
+    cleaned = re.sub(r"^(?:更改为|改为|改成|路线|行程)\s*", "", cleaned)
+    cleaned = re.sub(r"(?:有)?(?:的)?(?:火车|铁路|列车|路线|行程)$", "", cleaned)
+    return cleaned.strip()
+
+
+def _city_values_overlap(candidate: str, existing: str | None) -> bool:
+    if not existing:
+        return False
+    left = candidate.casefold().replace(" ", "")
+    right = existing.casefold().replace(" ", "")
+    return left in right or right in left
+
+
+def _normalize_short_answer(message: str) -> str:
+    return message.casefold().strip().strip("。.!！?？ ")
 
 
 def _first_number(message: str, patterns: tuple[str, ...]) -> float | None:

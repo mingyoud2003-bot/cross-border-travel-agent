@@ -46,7 +46,7 @@ def create_app(service: AgentService | None = None) -> FastAPI:
 
     api = FastAPI(
         title="Cross-border Travel Decision Agent",
-        version="0.5.0",
+        version="0.6.0",
         description="Evidence-grounded travel decisions with structured state.",
         lifespan=lifespan,
     )

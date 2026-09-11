@@ -62,13 +62,27 @@ def travel_instructions(
 
 
 def run_config_for(state: TravelState) -> RunConfig | None:
-    """Force the model through every pending decision dependency."""
+    """Force every actionable domain request through its required tool."""
 
     if (
         state.current_task == "decision"
         and state.is_actionable("decision")
         and "decision" not in state.tool_results
     ):
+        return RunConfig(model_settings=ModelSettings(tool_choice="required"))
+    if (
+        state.current_task == "train"
+        and state.is_actionable("train")
+        and "train" not in state.tool_results
+    ):
+        return RunConfig(model_settings=ModelSettings(tool_choice="required"))
+    if (
+        state.current_task == "mileage"
+        and state.is_actionable("mileage")
+        and "mileage" not in state.tool_results
+    ):
+        return RunConfig(model_settings=ModelSettings(tool_choice="required"))
+    if state.current_task == "loyalty" and "loyalty" not in state.tool_results:
         return RunConfig(model_settings=ModelSettings(tool_choice="required"))
     return None
 
@@ -99,3 +113,14 @@ travel_agent = Agent[TravelState](
     # stops the run. Dynamic tool gating leaves only valid pending dependencies.
     reset_tool_choice=False,
 )
+
+# Single-domain runs require exactly one business tool, then a normal language
+# response. Decision runs retain required tool choice across their dependency chain.
+single_task_agent = travel_agent.clone(
+    name="Travel Planner Single Task",
+    reset_tool_choice=True,
+)
+
+
+def agent_for_state(state: TravelState) -> Agent[TravelState]:
+    return travel_agent if state.current_task == "decision" else single_task_agent

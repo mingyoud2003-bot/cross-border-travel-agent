@@ -1,4 +1,4 @@
-# Reliability report v3
+# Reliability report v4
 
 > Historical baseline: the result below was produced before the integrated
 > decision workflow was added. The current dataset contains 100 cases; do not
@@ -96,6 +96,28 @@ The committed final merged artifact is `evals/results/latest.json` (generated as
 `run-20260909T141821Z.json`). Infrastructure retries were merged
 only when code, prompt, dataset, knowledge, and harness hashes matched; partial
 provider failures were never scored as product passes or product failures.
+
+## Deterministic turn-control regression
+
+Version 0.6 was run on 2026-09-11 after a live multi-turn session exposed
+confirmation loops, unsupported-route ambiguity, and an arrow-route parsing error.
+The application now resolves yes/no confirmation against an explicit pending
+proposal, preserves the value-bearing turn as provenance, handles missing and
+unsupported routes before entering the model loop, and prevents short commands
+such as “再帮我查火车” from being stored as city values.
+
+The fresh, uninterrupted full run passed all 100 cases and 136 conversation turns.
+Tool routing, behavior contract, structured-state/provenance, and output-contract
+accuracy were each 100%, with zero infrastructure errors and 184,431 tokens.
+Category results were: train 24/24, mileage 16/16, loyalty 20/20, multi-turn
+15/15, task-switch 8/8, general/hard-negative 7/7, and decision 10/10. The
+machine-readable artifact is `evals/results/latest.json`, generated as
+`run-20260911T100254Z.json`.
+
+This iteration also fixed an Eval integrity defect: full-width Chinese punctuation
+around an official URL was previously captured as part of the URL and could mark a
+grounded answer as failed. The citation grader now tokenizes those boundaries, with
+a deterministic regression test. Offline unit/API coverage is 107 tests.
 
 ## Web product layer
 

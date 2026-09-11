@@ -154,6 +154,30 @@ def test_grounded_answer_accepts_returned_citation_url():
     )
 
 
+def test_grounded_answer_accepts_urls_next_to_chinese_punctuation():
+    url_one = "https://example.com/benefits"
+    url_two = "https://example.com/lounges"
+    turn = {
+        "expected_behavior": "grounded_answer",
+        "expected_tool": "retrieve_loyalty_benefits",
+        "required_evidence_ids": ["tier", "lounge"],
+    }
+    outputs = [
+        {
+            "status": "success",
+            "evidence": [
+                {"id": "tier", "source_url": url_one},
+                {"id": "lounge", "source_url": url_two},
+            ],
+        }
+    ]
+    final_output = f"来源：British Airways（{url_one}）、oneworld（{url_two}）。"
+
+    assert grade_behavior(
+        turn, ["retrieve_loyalty_benefits"], outputs, final_output
+    )
+
+
 def test_train_provider_error_requires_user_visible_abstention():
     turn = {"expected_behavior": "tool_call", "expected_tool": "search_train"}
 

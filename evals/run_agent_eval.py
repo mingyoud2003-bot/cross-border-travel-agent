@@ -21,8 +21,9 @@ if str(ROOT) not in sys.path:
 from agents import Runner, SQLiteSession, set_tracing_disabled
 from agents.items import ToolCallItem, ToolCallOutputItem
 
-from agent import BASE_INSTRUCTIONS, run_config_for, travel_agent
+from agent import BASE_INSTRUCTIONS, agent_for_state, run_config_for, travel_agent
 from state import TravelState
+from turn_controller import controlled_turn_for
 
 
 CASES_FILE = ROOT / "evals" / "agent_cases.json"
@@ -288,6 +289,13 @@ def grade_state(expectation: dict[str, Any] | None, state: TravelState) -> bool:
         provenance = state.provenance(field_name)
         if provenance is None or provenance.turn_id != expected_turn:
             return False
+    expected_pending = expectation.get("pending_confirmation")
+    if expected_pending is not None:
+        pending = state.pending_confirmation
+        if pending is None or any(
+            getattr(pending, key) != value for key, value in expected_pending.items()
+        ):
+            return False
     return True
 
 
@@ -344,14 +352,22 @@ def grade_behavior(
                 )
         return base
     if behavior == "provider_abstain":
+        if expected_tool is None:
+            normalized = normalize_for_match(final_output)
+            return (
+                not actual_tools
+                and has_output
+                and any(term in normalized for term in ("不支持", "仅支持", "无法查询"))
+            )
         return actual_tools == [expected_tool] and "provider_error" in statuses and has_output
     if behavior == "grounded_answer":
         required = set(turn.get("required_evidence_ids", []))
         evidence_urls = collect_evidence_urls(outputs)
-        cited_urls = {
-            url.rstrip(".,，。)）")
-            for url in re.findall(r"https?://[^\s\]\[<>]+", final_output)
-        }
+        # Full-width punctuation surrounding a URL is prose, not part of the
+        # citation. Excluding it avoids false negatives in Chinese answers.
+        cited_urls = set(
+            re.findall(r"https?://[^\s\]\[<>，。；、（）()]+", final_output)
+        )
         return (
             actual_tools == [expected_tool]
             and "success" in statuses
@@ -419,15 +435,28 @@ def run_turn(
 ) -> dict[str, Any]:
     query = render_query(turn["query"])
     state.begin_turn(query)
-    result = Runner.run_sync(
-        travel_agent,
-        query,
-        session=session,
-        context=state,
-        run_config=run_config_for(state),
-    )
-    final_output = str(result.final_output or "")
-    calls, outputs = collect_run_data(result)
+    controlled = controlled_turn_for(state)
+    if controlled:
+        final_output = controlled.message
+        calls: list[dict[str, Any]] = []
+        outputs: list[Any] = []
+        usage = {
+            "requests": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+        }
+    else:
+        result = Runner.run_sync(
+            agent_for_state(state),
+            query,
+            session=session,
+            context=state,
+            run_config=run_config_for(state),
+        )
+        final_output = str(result.final_output or "")
+        calls, outputs = collect_run_data(result)
+        usage = usage_dict(result)
     infrastructure_error = infrastructure_error_from_outputs(outputs)
     if infrastructure_error:
         raise EvalInfrastructureError(infrastructure_error)
@@ -447,13 +476,14 @@ def run_turn(
         "tool_statuses": collect_statuses(outputs),
         "evidence_ids": sorted(collect_evidence_ids(outputs)),
         "final_output": final_output,
+        "control_reason": controlled.reason if controlled else None,
         "state": state.snapshot(),
         "route_pass": route_pass,
         "behavior_pass": behavior_pass,
         "state_pass": state_pass,
         "output_pass": output_pass,
         "pass": route_pass and behavior_pass and state_pass and output_pass,
-        "usage": usage_dict(result),
+        "usage": usage,
     }
 
 
@@ -511,6 +541,7 @@ def build_metadata(selected_cases: list[dict[str, Any]]) -> dict[str, Any]:
         "loyalty_retriever.py",
         "loyalty_scope.py",
         "transport_provider.py",
+        "turn_controller.py",
         "decision_service.py",
     )]
     return {

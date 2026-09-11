@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "travel-agent-v2"
-version = "0.5.0"
+version = "0.6.0"
 description = "AI travel agent for cross-border transport planning and loyalty benefits."
 requires-python = ">=3.11"
 
@@ -51,6 +51,7 @@ py-modules = [
     "logging_config",
     "rate_limit",
     "metrics",
+    "turn_controller",
 ]
 
 

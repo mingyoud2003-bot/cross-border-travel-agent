@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import date, timedelta
 from types import SimpleNamespace
 
 import httpx
@@ -132,7 +133,8 @@ def test_api_failure_rolls_back_business_state():
     session_id = service.create_session()["session_id"]
 
     with pytest.raises(AgentUnavailableError):
-        asyncio.run(service.chat("从伦敦去巴黎坐火车", session_id))
+        travel_date = (date.today() + timedelta(days=30)).isoformat()
+        asyncio.run(service.chat(f"{travel_date}从伦敦去巴黎坐火车", session_id))
 
     state = service.get_session(session_id)["state"]
     assert state["turn_id"] == 0
@@ -198,3 +200,38 @@ def test_service_records_agent_latency_and_token_metrics():
 
     assert 'travel_agent_runs_total{task="general",status="success"} 1' in rendered
     assert 'travel_agent_tokens_total{task="general",type="total_tokens"} 30' in rendered
+
+
+def test_missing_fields_bypass_model_with_zero_token_control_trace():
+    async def forbidden_runner(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("model must not run for deterministic clarification")
+
+    service = memory_service(forbidden_runner)
+    session_id = service.create_session()["session_id"]
+
+    response = asyncio.run(service.chat("从伦敦出发坐火车", session_id))
+
+    assert response["message"] == "请提供以下缺失信息：目的城市、明确日期（YYYY-MM-DD）。"
+    assert response["trace"]["control_reason"] == "clarification"
+    assert response["trace"]["usage"]["total_tokens"] == 0
+    assert response["trace"]["tools"] == []
+    assert service.get_session(session_id)["traces"][0]["control_reason"] == "clarification"
+
+
+def test_unsupported_route_bypasses_model_and_preserves_raw_cities():
+    async def forbidden_runner(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("model must not run outside the provider boundary")
+
+    service = memory_service(forbidden_runner)
+
+    response = asyncio.run(
+        service.chat(f"请查{date.today() + timedelta(days=30)}从柏林到科隆的火车")
+    )
+
+    assert response["trace"]["control_reason"] == "unsupported_route"
+    assert response["trace"]["usage"]["requests"] == 0
+    assert response["state"]["slots"]["origin"]["value"] == "柏林"
+    assert response["state"]["slots"]["destination"]["value"] == "科隆"
+    assert "不会猜测或替换" in response["message"]
