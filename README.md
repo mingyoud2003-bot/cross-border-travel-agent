@@ -1,11 +1,39 @@
-# Cross-border Travel Decision Agent
+# TripFlow Travel Operations Agent
 
-面向跨境出行决策的单 Agent 项目。系统将自然语言请求拆成铁路计划查询、
-里程兑换计算与常旅客权益检索，并在证据齐备后输出可追溯的结构化推荐。
+面向自由行用户的行程整理 Agent。用户可以粘贴中英文订单文字，也可以直接填写
+表单；Agent 只生成待确认候选，确认后系统才会写入航班、火车和住宿行程，检查
+时间重叠与换乘不足，最后导出带稳定 UID 的 ICS 日历。
+
+火车不限定为 Eurostar：运营商是可追溯的自由文本字段，Deutsche Bahn、SNCF、ÖBB、
+Renfe、中国铁路、JR 及其他运营商均可记录。截图/PDF 不是冷启动前提，当前主路径是
+文字与表单。
+
+## TripFlow workflow
+
+```mermaid
+flowchart LR
+    I[表单 / 粘贴文字] --> P[Agent typed proposal]
+    P --> G{Deterministic grounding}
+    G --> C[用户补全与确认]
+    C --> S[Versioned itinerary + provenance]
+    S --> D[Conflict detector]
+    S --> E[Stable ICS export]
+```
+
+### 可靠性边界
+
+- Agent 没有修改行程的工具；候选解析 API 不会改变已确认 state。
+- 确定性后处理删除无原文证据的运营商与时区，拒绝只有时分、没有日期的不完整时间。
+- 每个确认字段保留 source type、source ID、原文摘要、确认状态和记录时间。
+- 修改、删除使用 `If-Match` 乐观并发控制；过期页面不能静默覆盖新版本。
+- 冲突检测、时区校验、持久化和 ICS 生成由应用代码负责，不交给模型推理。
+
+v0.6 的跨境出行决策引擎仍保留在仓库中，作为复杂多轮 state / tool / RAG 可靠性的
+对照实现；下文保留其设计与评测记录。
 
 ![Application architecture](docs/agent-interactions.png)
 
-## Decision workflow
+## Legacy decision workflow
 
 ```mermaid
 flowchart LR
@@ -59,7 +87,8 @@ pip install -e '.[dev]'
 PORT=8000 python main.py
 ```
 
-浏览器访问 `http://127.0.0.1:8000`，API 文档位于 `/docs`。不设置 `PORT`
+浏览器访问 `http://127.0.0.1:8000/tripflow`，API 文档位于 `/docs`。旧版界面保留在 `/`。
+不设置 `PORT`
 时保留原来的命令行交互模式：
 
 ```bash
@@ -77,12 +106,16 @@ python main.py
 
 ```bash
 python -m pytest -q
+python evals/run_tripflow_eval.py --validate-only
+python evals/run_tripflow_eval.py
 python evals/run_agent_eval.py --validate-only
 python evals/run_agent_eval.py --category decision
 python evals/run_agent_eval.py --all
 ```
 
-当前确定性测试为 107/107。最终控制层版本的完整真实 Agent Eval 覆盖 100 个
+当前确定性测试为 125/125。TripFlow 真实 Agent Eval 首轮为 26/30，针对时区推测、
+航空公司猜测和不完整时间实现确定性 grounding 后回归为 30/30。原 v0.6 最终
+控制层的完整真实 Agent Eval 覆盖 100 个
 case、136 个对话轮次，100/100 通过；工具路由、行为契约、structured state /
 provenance 与输出契约四项指标均为 100%，基础设施失败经同版本断点重试后为 0。
 其中综合决策专项为 10/10。详见 [评测报告](evals/REPORT.md)。本地单 worker、
@@ -120,7 +153,7 @@ docker run --rm -p 8000:8000 \
 
 容器以非 root 用户运行，named volume 保存 SQLite 数据。当前限流器是面向单 worker
 部署的进程内保护；横向扩容时应替换为 Redis/API Gateway 限流。GitHub Actions 在
-每次 push/PR 执行 107 项测试、Eval 数据集静态校验、Python 编译检查和 Docker 构建；
+每次 push/PR 执行 125 项测试、两套 Eval 数据集静态校验、Python 编译检查和 Docker 构建；
 CI 不读取线上密钥，也不会产生模型费用。
 
 ## Deploy to Render
@@ -147,6 +180,10 @@ python scripts/load_test.py --target session --requests 200 --concurrency 20
 
 ```text
 agent.py / tools.py / state.py     Agent reliability core
+tripflow_agent.py                  grounded typed proposal extraction
+tripflow_models.py / service.py    versioned itinerary and provenance
+tripflow_conflicts.py              deterministic timeline checks
+tripflow_api.py / web/tripflow.*   REST contract and product UI
 turn_controller.py                 deterministic turn-level control
 decision_service.py                deterministic recommendation composer
 agent_service.py                   persistent sessions, rollback and trace

@@ -21,7 +21,9 @@ jobs:
       - name: Unit and API tests
         run: python -m pytest -q
       - name: Validate Eval dataset
-        run: python evals/run_agent_eval.py --validate-only
+        run: |
+          python evals/run_agent_eval.py --validate-only
+          python evals/run_tripflow_eval.py --validate-only
       - name: Compile Python sources
         run: python -m compileall -q .
 

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TripFlow · Trusted itinerary</title>
+  <link rel="stylesheet" href="/static/tripflow.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/tripflow"><span>TF</span> TripFlow</a>
+    <p>Trusted itinerary, before it reaches your calendar.</p>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">TRAVEL OPERATIONS AGENT</p>
+      <h1>把零散订单，变成可核验的行程。</h1>
+      <p class="lede">用一段话或表单添加航班、火车与住宿，确认每个时区后检查衔接冲突，再导出日历。</p>
+    </section>
+
+    <section id="create-view" class="card create-card">
+      <div>
+        <p class="eyebrow">START A TRIP</p>
+        <h2>无需上传截图，先创建一次行程</h2>
+      </div>
+      <form id="create-form">
+        <label>行程名称<input id="trip-title" required maxlength="120" placeholder="例如：2026 德国与法国"></label>
+        <label>最低换乘缓冲（分钟）<input id="min-connection" type="number" min="0" max="1440" value="90"></label>
+        <button type="submit" class="primary">创建行程</button>
+      </form>
+    </section>
+
+    <section id="workspace" class="workspace hidden">
+      <aside class="panel input-panel">
+        <div class="section-head">
+          <div><p class="eyebrow">QUICK ADD</p><h2>一句话填充</h2></div>
+          <button id="sample" class="ghost" type="button">填入示例</button>
+        </div>
+        <textarea id="quick-text" rows="5" placeholder="2026年10月26日乘坐 Deutsche Bahn ICE 105，08:45 从 Berlin Hbf 出发，13:12 到 Köln Hbf"></textarea>
+        <button id="parse-text" class="secondary" type="button">Agent 解析为待确认字段</button>
+        <p id="proposal-note" class="notice hidden"></p>
+
+        <div class="divider"></div>
+        <p class="eyebrow">CONFIRMED FORM</p>
+        <h2>添加交通</h2>
+        <form id="transport-form" class="form-grid">
+          <label>类型<select id="mode"><option value="train">火车</option><option value="flight">航班</option></select></label>
+          <label>运营商<input id="operator" required placeholder="Deutsche Bahn / SNCF / 中国铁路"></label>
+          <label>车次 / 航班号<input id="service-number" placeholder="ICE 105"></label>
+          <span></span>
+          <label>出发站<input id="origin-name" required placeholder="Berlin Hbf"></label>
+          <label>出发城市<input id="origin-city" required placeholder="Berlin"></label>
+          <label>出发时区<input id="origin-timezone" required value="Europe/Berlin"></label>
+          <label>出发当地时间<input id="departure-at" required type="datetime-local"></label>
+          <label>到达站<input id="destination-name" required placeholder="Köln Hbf"></label>
+          <label>到达城市<input id="destination-city" required placeholder="Cologne"></label>
+          <label>到达时区<input id="destination-timezone" required value="Europe/Berlin"></label>
+          <label>到达当地时间<input id="arrival-at" required type="datetime-local"></label>
+          <button id="transport-submit" class="primary full" type="submit">确认并加入行程</button>
+        </form>
+
+        <div class="divider"></div>
+        <p class="eyebrow">STAY</p>
+        <h2>添加住宿</h2>
+        <form id="stay-form" class="form-grid form-section">
+          <label>酒店 / 住宿名称<input id="property-name" required placeholder="Hotel AMANO Grand Central"></label>
+          <label>城市<input id="stay-city" required placeholder="Berlin"></label>
+          <label class="full">地址（可选）<input id="stay-address" placeholder="Heidestraße 62"></label>
+          <label>入住日期<input id="check-in" required type="date"></label>
+          <label>退房日期<input id="check-out" required type="date"></label>
+          <button id="stay-submit" class="primary full" type="submit">确认并加入行程</button>
+        </form>
+      </aside>
+
+      <section class="panel timeline-panel">
+        <div class="section-head">
+          <div><p class="eyebrow">ITINERARY</p><h2 id="active-title"></h2></div>
+          <a id="ics-link" class="ghost button-link" href="#">导出 ICS</a>
+        </div>
+        <div id="conflicts" class="conflicts"></div>
+        <div id="timeline" class="timeline"><p class="empty">还没有行程。可以用一句话填充，或直接使用表单。</p></div>
+      </section>
+    </section>
+  </main>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="/static/tripflow.js" defer></script>
+</body>
+</html>

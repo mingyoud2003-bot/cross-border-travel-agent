@@ -23,17 +23,28 @@ from api_models import (
 from logging_config import configure_logging
 from metrics import MetricsRegistry
 from rate_limit import SlidingWindowRateLimiter
-from settings import api_key_configured, load_local_env, rate_limit_per_minute
+from settings import (
+    api_key_configured,
+    load_local_env,
+    rate_limit_per_minute,
+    session_db_path,
+)
+from tripflow_api import build_tripflow_router
+from tripflow_service import TripFlowService
 
 
 ROOT = Path(__file__).resolve().parent
 WEB_DIR = ROOT / "web"
 
 
-def create_app(service: AgentService | None = None) -> FastAPI:
+def create_app(
+    service: AgentService | None = None,
+    tripflow_service: TripFlowService | None = None,
+) -> FastAPI:
     load_local_env()
     metrics = MetricsRegistry()
     runtime = service or AgentService(metrics=metrics)
+    tripflow = tripflow_service or TripFlowService(db_path=session_db_path())
     limiter = SlidingWindowRateLimiter(rate_limit_per_minute())
     logger = configure_logging()
 
@@ -43,13 +54,15 @@ def create_app(service: AgentService | None = None) -> FastAPI:
         close = getattr(getattr(runtime, "store", None), "close", None)
         if close:
             close()
+        tripflow.close()
 
     api = FastAPI(
-        title="Cross-border Travel Decision Agent",
-        version="0.6.0",
-        description="Evidence-grounded travel decisions with structured state.",
+        title="TripFlow Travel Operations Agent",
+        version="0.7.0",
+        description="A confirmation-gated itinerary workspace with traceable AI extraction.",
         lifespan=lifespan,
     )
+    api.include_router(build_tripflow_router(tripflow))
 
     @api.middleware("http")
     async def request_observability(request: Request, call_next):
@@ -61,9 +74,22 @@ def create_app(service: AgentService | None = None) -> FastAPI:
         )
         request.state.request_id = request_id
         started = time.perf_counter()
+        limited_response = None
+        if (
+            request.method == "POST"
+            and request.url.path.endswith("/proposals/text")
+        ):
+            client_key = request.client.host if request.client else "unknown"
+            allowed, retry_after = await limiter.check(client_key)
+            if not allowed:
+                limited_response = JSONResponse(
+                    status_code=429,
+                    content={"detail": "Rate limit exceeded."},
+                    headers={"Retry-After": str(retry_after)},
+                )
         status_code = 500
         try:
-            response = await call_next(request)
+            response = limited_response or await call_next(request)
             status_code = response.status_code
         except Exception:
             route = request.scope.get("route")
@@ -181,8 +207,13 @@ def create_app(service: AgentService | None = None) -> FastAPI:
     async def index() -> FileResponse:
         return FileResponse(WEB_DIR / "index.html")
 
+    @api.get("/tripflow", include_in_schema=False)
+    async def tripflow_home() -> FileResponse:
+        return FileResponse(WEB_DIR / "tripflow.html")
+
     api.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
     api.state.agent_service = runtime
+    api.state.tripflow_service = tripflow
     api.state.metrics = metrics
     return api
 
