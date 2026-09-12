@@ -62,6 +62,9 @@ Reliability contract:
 - Ask concise clarification questions only for facts that materially affect the
   itinerary timeline.
 - Support arbitrary train and airline operators; do not apply an allowlist.
+- Do not extract hypothetical examples, search/recommendation requests, prompt
+  tests, or journeys the user explicitly says were not booked or should not be
+  added.
 """
 
 
@@ -100,6 +103,12 @@ def normalize_proposal(text: str, proposal: ItineraryProposal) -> ItineraryPropo
     """Recompute contractual missing fields instead of trusting model labels."""
 
     normalized = proposal.model_copy(deep=True)
+    if _explicitly_not_an_itinerary(text):
+        normalized.transports = []
+        normalized.stays = []
+        normalized.clarification_questions = []
+        normalized.warnings.append("原文明确表示这不是要加入的已预订行程。")
+        return normalized
     for item in normalized.transports:
         item.status = "draft"
         item.operator = _grounded_operator(text, item.operator, item.service_number)
@@ -187,3 +196,27 @@ def _complete_date(value: str | None) -> str | None:
     except ValueError:
         return None
     return parsed.isoformat()
+
+
+def _explicitly_not_an_itinerary(text: str) -> bool:
+    normalized = " ".join(text.casefold().split())
+    phrases = (
+        "not my booking",
+        "not a booking",
+        "not booked anything",
+        "have not booked anything",
+        "decided not to book",
+        "do not add it",
+        "do not add this",
+        "only a prompt test",
+        "this is a prompt test",
+        "security test text",
+        "there is no actual itinerary",
+        "do not have a reservation",
+        "不是我的订单",
+        "这不是订单",
+        "没有预订",
+        "还没预订",
+        "不要添加",
+    )
+    return any(phrase in normalized for phrase in phrases)

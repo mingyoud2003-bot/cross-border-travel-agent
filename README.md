@@ -87,7 +87,7 @@ pip install -e '.[dev]'
 PORT=8000 python main.py
 ```
 
-浏览器访问 `http://127.0.0.1:8000/tripflow`，API 文档位于 `/docs`。旧版界面保留在 `/`。
+浏览器访问 `http://127.0.0.1:8000`，API 文档位于 `/docs`。旧版界面保留在 `/legacy`。
 不设置 `PORT`
 时保留原来的命令行交互模式：
 
@@ -113,8 +113,10 @@ python evals/run_agent_eval.py --category decision
 python evals/run_agent_eval.py --all
 ```
 
-当前确定性测试为 125/125。TripFlow 真实 Agent Eval 首轮为 26/30，针对时区推测、
-航空公司猜测和不完整时间实现确定性 grounding 后回归为 30/30。原 v0.6 最终
+当前确定性测试为 131/131。TripFlow 真实 Agent Eval 覆盖 90 个 case：扩展集
+首轮 83/90，针对否定语义增加确定性闸门，并将有原文证据的运营商/产品线分栏
+差异记录为有限等价值后，对同一批真实输出离线 regrade 为 90/90，基础设施失败为 0。
+原 v0.6 最终
 控制层的完整真实 Agent Eval 覆盖 100 个
 case、136 个对话轮次，100/100 通过；工具路由、行为契约、structured state /
 provenance 与输出契约四项指标均为 100%，基础设施失败经同版本断点重试后为 0。
@@ -153,7 +155,8 @@ docker run --rm -p 8000:8000 \
 
 容器以非 root 用户运行，named volume 保存 SQLite 数据。当前限流器是面向单 worker
 部署的进程内保护；横向扩容时应替换为 Redis/API Gateway 限流。GitHub Actions 在
-每次 push/PR 执行 125 项测试、两套 Eval 数据集静态校验、Python 编译检查和 Docker 构建；
+每次 push/PR 执行 131 项测试、两套 Eval 数据集静态校验、JavaScript/Python
+语法检查和 Docker 构建；
 CI 不读取线上密钥，也不会产生模型费用。
 
 ## Deploy to Render

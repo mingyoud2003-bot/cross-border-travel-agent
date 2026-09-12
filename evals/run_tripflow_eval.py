@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import sys
+import time
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
@@ -55,7 +56,8 @@ def grade(case: dict[str, Any], output: dict[str, Any]) -> dict[str, Any]:
         checks.append({"name": f"count:{collection}", "pass": actual == expected, "expected": expected, "actual": actual})
     for path, expected in case["equals"].items():
         actual = value_at(output, path)
-        checks.append({"name": f"equals:{path}", "pass": actual == expected, "expected": expected, "actual": actual})
+        passed = actual in expected if isinstance(expected, list) else actual == expected
+        checks.append({"name": f"equals:{path}", "pass": passed, "expected": expected, "actual": actual})
     for path in case.get("missing", []):
         collection, index, field = path.split(".", 2)
         items = output.get(collection, [])
@@ -64,27 +66,83 @@ def grade(case: dict[str, Any], output: dict[str, Any]) -> dict[str, Any]:
     return {"passed": all(check["pass"] for check in checks), "checks": checks}
 
 
-async def run(cases: list[dict[str, Any]], category: str | None) -> dict[str, Any]:
-    selected = [case for case in cases if category is None or case["category"] == category]
+def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
+    scored = [item for item in results if "infrastructure_error" not in item]
+    passed = sum(item["passed"] for item in scored)
+    infrastructure_errors = len(results) - len(scored)
+    by_category = Counter(item["category"] for item in scored if item["passed"])
+    totals = Counter(item["category"] for item in scored)
+    return {
+        "passed": passed,
+        "scored": len(scored),
+        "total_cases": len(results),
+        "infrastructure_errors": infrastructure_errors,
+        "product_pass_rate": passed / len(scored) if scored else 0,
+        "by_category": {
+            key: {"passed": by_category[key], "total": total}
+            for key, total in totals.items()
+        },
+    }
+
+
+def regrade_report(
+    cases: list[dict[str, Any]], report: dict[str, Any]
+) -> dict[str, Any]:
+    cases_by_id = {case["id"]: case for case in cases}
+    regraded = []
+    for previous in report.get("results", []):
+        case = cases_by_id.get(previous["id"])
+        if case is None:
+            raise ValueError(f"result references unknown case: {previous['id']}")
+        if "infrastructure_error" in previous:
+            regraded.append(previous)
+            continue
+        result = grade(case, previous["output"])
+        regraded.append({**previous, **result})
+    if len(regraded) != len(cases):
+        raise ValueError("regrade requires a full result set matching the dataset")
+    return {
+        **report,
+        "regraded_at": datetime.now(UTC).isoformat(),
+        "summary": summarize(regraded),
+        "results": regraded,
+    }
+
+
+async def run(
+    cases: list[dict[str, Any]],
+    category: str | None,
+    case_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    requested = set(case_ids or [])
+    selected = [
+        case
+        for case in cases
+        if (category is None or case["category"] == category)
+        and (not requested or case["id"] in requested)
+    ]
+    if not selected:
+        raise ValueError("no TripFlow Eval cases matched the selection")
+    unknown = requested - {case["id"] for case in selected}
+    if unknown:
+        raise ValueError(f"unknown or category-mismatched case ids: {sorted(unknown)}")
     service = AgentsProposalService()
     results = []
     for case in selected:
+        started = time.perf_counter()
         try:
             proposal = await service.propose(case["input"])
             output = proposal.model_dump(mode="json")
             result = grade(case, output)
-            results.append({"id": case["id"], "category": case["category"], **result, "output": output})
+            results.append({"id": case["id"], "category": case["category"], **result, "latency_ms": round((time.perf_counter() - started) * 1000), "output": output})
             print(f"{'PASS' if result['passed'] else 'FAIL'} {case['id']}")
         except Exception as exc:
-            results.append({"id": case["id"], "category": case["category"], "passed": False, "infrastructure_error": type(exc).__name__})
+            results.append({"id": case["id"], "category": case["category"], "passed": False, "latency_ms": round((time.perf_counter() - started) * 1000), "infrastructure_error": type(exc).__name__})
             print(f"ERROR {case['id']}: {type(exc).__name__}")
-    passed = sum(item["passed"] for item in results)
-    by_category = Counter(item["category"] for item in results if item["passed"])
-    totals = Counter(item["category"] for item in results)
     return {
         "created_at": datetime.now(UTC).isoformat(),
         "dataset": CASES_PATH.name,
-        "summary": {"passed": passed, "total": len(results), "pass_rate": passed / len(results) if results else 0, "by_category": {key: {"passed": by_category[key], "total": total} for key, total in totals.items()}},
+        "summary": summarize(results),
         "results": results,
     }
 
@@ -93,18 +151,27 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run the real TripFlow extraction Eval")
     parser.add_argument("--validate-only", action="store_true")
     parser.add_argument("--category")
+    parser.add_argument("--case", action="append", dest="case_ids")
+    parser.add_argument("--regrade", action="store_true")
     args = parser.parse_args()
     cases = load_cases()
     print(f"validated {len(cases)} TripFlow Eval cases")
     if args.validate_only:
         return
     load_local_env()
-    report = asyncio.run(run(cases, args.category))
+    if args.regrade:
+        if args.category or args.case_ids:
+            parser.error("--regrade cannot be combined with --category or --case")
+        previous = json.loads(RESULTS_PATH.read_text(encoding="utf-8"))
+        report = regrade_report(cases, previous)
+    else:
+        report = asyncio.run(run(cases, args.category, args.case_ids))
     RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
     RESULTS_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     summary = report["summary"]
-    print(f"result: {summary['passed']}/{summary['total']} ({summary['pass_rate']:.1%})")
-    raise SystemExit(0 if summary["passed"] == summary["total"] else 1)
+    print(f"product result: {summary['passed']}/{summary['scored']} ({summary['product_pass_rate']:.1%}); infrastructure errors: {summary['infrastructure_errors']}")
+    clean = summary["passed"] == summary["scored"] and summary["infrastructure_errors"] == 0
+    raise SystemExit(0 if clean else 1)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from app import create_app
 from state import TravelState
+from tripflow_service import TripFlowService
 
 
 class FakeService:
@@ -88,12 +89,75 @@ def test_web_ui_and_static_assets_are_served():
     api = client()
 
     page = api.get("/")
-    script = api.get("/static/app.js")
+    tripflow_script = api.get("/static/tripflow.js")
 
     assert page.status_code == 200
-    assert "Travel Decision Agent" in page.text
-    assert script.status_code == 200
-    assert "renderDecision" in script.text
+    assert "TripFlow" in page.text
+    assert 'id="transport-form"' in page.text
+    assert 'id="stay-form"' in page.text
+    assert tripflow_script.status_code == 200
+    assert "proposalQueue" in tripflow_script.text
+    assert "escapeHtml" in tripflow_script.text
+
+    legacy_page = api.get("/legacy")
+    legacy_script = api.get("/static/app.js")
+    assert legacy_page.status_code == 200
+    assert "Travel Decision Agent" in legacy_page.text
+    assert legacy_script.status_code == 200
+    assert "renderDecision" in legacy_script.text
+
+
+def test_tripflow_main_app_flow_reaches_conflict_and_calendar():
+    api = TestClient(create_app(FakeService(), TripFlowService()))
+    trip = api.post(
+        "/api/trips", json={"title": "Browser flow", "minimum_connection_minutes": 90}
+    ).json()
+    first = {
+        "mode": "train",
+        "operator": "Deutsche Bahn",
+        "service_number": "ICE 1",
+        "origin": {"name": "Berlin Hbf", "city": "Berlin", "timezone": "Europe/Berlin"},
+        "destination": {"name": "Frankfurt Hbf", "city": "Frankfurt", "timezone": "Europe/Berlin"},
+        "departure_at": "2026-10-26T08:00",
+        "arrival_at": "2026-10-26T11:00",
+    }
+    trip = api.post(
+        f"/api/trips/{trip['id']}/transport",
+        headers={"If-Match": str(trip["version"])}, json=first,
+    ).json()
+    second = {
+        **first,
+        "service_number": "ICE 2",
+        "origin": {"name": "Frankfurt Airport", "city": "Frankfurt", "timezone": "Europe/Berlin"},
+        "destination": {"name": "Köln Hbf", "city": "Cologne", "timezone": "Europe/Berlin"},
+        "departure_at": "2026-10-26T11:30",
+        "arrival_at": "2026-10-26T13:00",
+    }
+    trip = api.post(
+        f"/api/trips/{trip['id']}/transport",
+        headers={"If-Match": str(trip["version"])}, json=second,
+    ).json()
+
+    conflicts = api.get(f"/api/trips/{trip['id']}/conflicts")
+    calendar = api.get(f"/api/trips/{trip['id']}/calendar.ics")
+
+    assert conflicts.status_code == 200
+    assert conflicts.json()[0]["type"] == "short_connection"
+    assert conflicts.json()[0]["evidence"]["buffer_minutes"] == 30
+    assert calendar.status_code == 200
+    assert calendar.text.count("BEGIN:VEVENT") == 2
+
+
+def test_tripflow_proposal_endpoint_is_rate_limited_before_model_call(monkeypatch):
+    monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "1")
+    api = TestClient(create_app(FakeService(), TripFlowService()))
+
+    first = api.post("/api/trips/not-found/proposals/text", json={"text": "booking"})
+    second = api.post("/api/trips/not-found/proposals/text", json={"text": "booking"})
+
+    assert first.status_code == 404
+    assert second.status_code == 429
+    assert "retry-after" in second.headers
 
 
 def test_readiness_checks_database_and_key(monkeypatch):

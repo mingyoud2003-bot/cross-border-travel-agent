@@ -26,6 +26,8 @@ jobs:
           python evals/run_tripflow_eval.py --validate-only
       - name: Compile Python sources
         run: python -m compileall -q .
+      - name: Validate browser JavaScript syntax
+        run: node --check web/tripflow.js
 
   container:
     runs-on: ubuntu-latest

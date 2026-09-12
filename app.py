@@ -146,7 +146,7 @@ def create_app(
     async def health() -> dict:
         return {
             "status": "ok",
-            "service": "travel-decision-agent",
+            "service": "tripflow-agent",
             "version": api.version,
             "model": str(travel_agent.model),
             "api_key_configured": api_key_configured(),
@@ -205,11 +205,15 @@ def create_app(
 
     @api.get("/", include_in_schema=False)
     async def index() -> FileResponse:
-        return FileResponse(WEB_DIR / "index.html")
+        return FileResponse(WEB_DIR / "tripflow.html")
 
     @api.get("/tripflow", include_in_schema=False)
     async def tripflow_home() -> FileResponse:
         return FileResponse(WEB_DIR / "tripflow.html")
+
+    @api.get("/legacy", include_in_schema=False)
+    async def legacy_home() -> FileResponse:
+        return FileResponse(WEB_DIR / "index.html")
 
     api.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
     api.state.agent_service = runtime

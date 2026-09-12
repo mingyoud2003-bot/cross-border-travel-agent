@@ -218,6 +218,29 @@ def test_proposal_normalizer_removes_inferred_operator_and_partial_datetimes():
     ]
 
 
+def test_proposal_normalizer_rejects_explicitly_unbooked_journey():
+    text = "I considered SNCF TGV 6201 but decided not to book it."
+    proposal = ItineraryProposal(
+        transports=[
+            TransportCandidate(
+                mode="train",
+                operator="SNCF",
+                service_number="TGV 6201",
+                origin=LocationCandidate(name="Paris", city="Paris"),
+                destination=LocationCandidate(name="Avignon", city="Avignon"),
+                source_excerpt="SNCF TGV 6201",
+            )
+        ]
+    )
+
+    normalized = normalize_proposal(text, proposal)
+
+    assert normalized.transports == []
+    assert normalized.stays == []
+    assert normalized.clarification_questions == []
+    assert "不是要加入" in normalized.warnings[-1]
+
+
 def test_update_and_delete_reservation_http_contract():
     api = client()
     trip = api.post("/api/trips", json={"title": "Editable"}).json()

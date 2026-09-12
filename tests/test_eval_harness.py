@@ -3,6 +3,7 @@ from datetime import date
 import json
 
 import pytest
+import evals.run_tripflow_eval as tripflow_eval
 
 from evals.run_agent_eval import (
     EvalConfigError,
@@ -24,6 +25,51 @@ def test_dataset_has_target_case_count_and_unique_ids():
 
     assert 80 <= len(cases) <= 100
     assert len({case["id"] for case in cases}) == len(cases)
+
+
+def test_tripflow_dataset_has_90_cases_and_meaningful_coverage():
+    cases = tripflow_eval.load_cases()
+    categories = {case["category"] for case in cases}
+
+    assert len(cases) == 90
+    assert {
+        "train", "flight", "stay", "missing", "multi_item", "negative",
+        "adversarial",
+    } <= categories
+
+
+def test_tripflow_grader_checks_counts_exact_fields_and_missing_contract():
+    case = {
+        "id": "unit",
+        "category": "missing",
+        "input": "x",
+        "counts": {"transports": 1, "stays": 0},
+        "equals": {"transports.0.operator": "DB"},
+        "missing": ["transports.0.origin.timezone"],
+    }
+    output = {
+        "transports": [
+            {"operator": "DB", "missing_fields": ["origin.timezone"]}
+        ],
+        "stays": [],
+    }
+
+    result = tripflow_eval.grade(case, output)
+
+    assert result["passed"] is True
+
+
+def test_tripflow_grader_accepts_explicit_equivalent_field_values():
+    case = {
+        "id": "equivalent",
+        "category": "train",
+        "input": "x",
+        "counts": {"transports": 1, "stays": 0},
+        "equals": {"transports.0.operator": ["SNCF", "SNCF TGV"]},
+    }
+    output = {"transports": [{"operator": "SNCF TGV"}], "stays": []}
+
+    assert tripflow_eval.grade(case, output)["passed"] is True
 
 
 def test_relative_date_rendering_is_stable():
