@@ -96,7 +96,8 @@ def test_web_ui_and_static_assets_are_served():
     assert 'id="transport-form"' in page.text
     assert 'id="stay-form"' in page.text
     assert tripflow_script.status_code == 200
-    assert "proposalQueue" in tripflow_script.text
+    assert "ready_for_confirmation" in tripflow_script.text
+    assert "/conversation" in tripflow_script.text
     assert "escapeHtml" in tripflow_script.text
 
     legacy_page = api.get("/legacy")

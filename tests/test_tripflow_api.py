@@ -12,7 +12,9 @@ from tripflow_agent import (
     FlightLookupRequest,
     ItineraryProposal,
     LocationCandidate,
+    StayCandidate,
     TransportCandidate,
+    merge_conversation_draft,
     normalize_proposal,
     ProposalUnavailableError,
 )
@@ -116,6 +118,36 @@ class CrashingFlightProvider(FakeFlightProvider):
         raise RuntimeError("unexpected provider failure")
 
 
+class FakeConversationService:
+    async def respond(self, messages, draft):
+        user_messages = [item.content for item in messages if item.role == "user"]
+        if len(user_messages) == 1:
+            return (
+                "请补充日期",
+                ItineraryProposal(
+                    flight_lookups=[
+                        FlightLookupRequest(
+                            flight_number="LH400",
+                            missing_fields=["departure_date"],
+                            source_excerpt="LH400",
+                        )
+                    ]
+                ),
+            )
+        return (
+            "可以确认",
+            ItineraryProposal(
+                flight_lookups=[
+                    FlightLookupRequest(
+                        flight_number="LH400",
+                        departure_date=date(2026, 10, 26),
+                        source_excerpt="LH400",
+                    )
+                ]
+            ),
+        )
+
+
 def client() -> TestClient:
     app = FastAPI()
     app.include_router(
@@ -147,6 +179,19 @@ def crashing_flight_lookup_client() -> TestClient:
     app.include_router(
         build_tripflow_router(
             TripFlowService(), FlightLookupProposalService(), CrashingFlightProvider()
+        )
+    )
+    return TestClient(app)
+
+
+def conversation_client() -> TestClient:
+    app = FastAPI()
+    app.include_router(
+        build_tripflow_router(
+            TripFlowService(),
+            FlightLookupProposalService(),
+            FakeFlightProvider(),
+            FakeConversationService(),
         )
     )
     return TestClient(app)
@@ -284,6 +329,45 @@ def test_unexpected_provider_failure_degrades_without_losing_agent_proposal():
     assert body["flight_lookups"][0]["flight_number"] == "LH400"
     assert body["provider_lookups"][0]["status"] == "unavailable"
     assert "未经核验" in body["provider_lookups"][0]["message"]
+
+
+def test_conversation_persists_missing_state_then_opens_confirmation_candidate():
+    api = conversation_client()
+    trip = api.post("/api/trips", json={"title": "Conversational"}).json()
+
+    first = api.post(
+        f"/api/trips/{trip['id']}/conversation",
+        json={"message": "帮我查 LH400"},
+    )
+    second = api.post(
+        f"/api/trips/{trip['id']}/conversation",
+        json={"message": "2026-10-26"},
+    )
+    restored = api.get(f"/api/trips/{trip['id']}/conversation")
+
+    assert first.status_code == 200
+    assert first.json()["ready_for_confirmation"] is False
+    assert "明确出发日期" in first.json()["messages"][-1]["content"]
+    assert first.json()["draft"]["provider_lookups"] == []
+    assert second.status_code == 200
+    assert second.json()["ready_for_confirmation"] is True
+    assert second.json()["draft"]["provider_lookups"][0]["status"] == "found"
+    assert len(restored.json()["messages"]) == 4
+
+
+def test_conversation_reset_clears_draft_and_messages():
+    api = conversation_client()
+    trip = api.post("/api/trips", json={"title": "Reset"}).json()
+    api.post(
+        f"/api/trips/{trip['id']}/conversation",
+        json={"message": "帮我查 LH400"},
+    )
+
+    reset = api.delete(f"/api/trips/{trip['id']}/conversation")
+
+    assert reset.status_code == 200
+    assert reset.json()["messages"] == []
+    assert reset.json()["draft"]["flight_lookups"] == []
 
 
 def test_provider_candidate_requires_confirmation_and_gets_trusted_provenance():
@@ -453,6 +537,127 @@ def test_flight_lookup_normalizer_requires_grounded_number_date_and_intent():
     assert grounded.flight_lookups[0].missing_fields == []
     assert no_intent.flight_lookups == []
     assert hallucinated.flight_lookups == []
+
+
+def test_conversation_draft_deterministically_combines_flight_number_and_date():
+    previous = ItineraryProposal(
+        flight_lookups=[
+            FlightLookupRequest(
+                flight_number="LH400",
+                missing_fields=["departure_date"],
+                source_excerpt="LH400",
+            )
+        ]
+    )
+
+    merged = merge_conversation_draft(
+        "帮我查 LH400\n出发日期是 2026-09-12",
+        "出发日期是 2026-09-12",
+        previous,
+        ItineraryProposal(),
+    )
+
+    assert merged.flight_lookups[0].flight_number == "LH400"
+    assert merged.flight_lookups[0].departure_date == date(2026, 9, 12)
+    assert merged.flight_lookups[0].missing_fields == []
+
+
+def test_explicit_stay_switch_does_not_carry_old_transport_draft():
+    previous = ItineraryProposal(
+        transports=[
+            TransportCandidate(
+                mode="train",
+                operator="DB",
+                origin=LocationCandidate(name="Berlin", city="Berlin"),
+                destination=LocationCandidate(name="Cologne", city="Cologne"),
+                source_excerpt="DB Berlin Cologne",
+            )
+        ]
+    )
+    current = ItineraryProposal(
+        stays=[
+            StayCandidate(
+                property_name="Hotel AMANO",
+                city="Berlin",
+                source_excerpt="改成添加 Berlin 的 Hotel AMANO 住宿",
+            )
+        ]
+    )
+
+    merged = merge_conversation_draft(
+        "DB Berlin Cologne\n改成添加 Berlin 的 Hotel AMANO 住宿",
+        "改成添加 Berlin 的 Hotel AMANO 住宿",
+        previous,
+        current,
+    )
+
+    assert merged.transports == []
+    assert len(merged.stays) == 1
+
+
+def test_explicit_same_domain_new_task_does_not_reuse_old_route():
+    previous = ItineraryProposal(
+        transports=[
+            TransportCandidate(
+                mode="train",
+                operator="DB",
+                origin=LocationCandidate(name="Berlin", city="Berlin"),
+                destination=LocationCandidate(name="Cologne", city="Cologne"),
+                source_excerpt="DB Berlin Cologne",
+            )
+        ]
+    )
+    current = ItineraryProposal(
+        transports=[
+            TransportCandidate(
+                mode="train",
+                operator="SNCF",
+                origin=LocationCandidate(name="Paris", city="Paris"),
+                destination=LocationCandidate(),
+                source_excerpt="换一个新任务：SNCF 从 Paris 出发",
+            )
+        ]
+    )
+
+    merged = merge_conversation_draft(
+        "DB Berlin Cologne\n换一个新任务：SNCF 从 Paris 出发",
+        "换一个新任务：SNCF 从 Paris 出发",
+        previous,
+        current,
+    )
+
+    assert merged.transports[0].origin.city == "Paris"
+    assert merged.transports[0].destination.city is None
+
+
+def test_conversation_derives_known_city_timezones_without_asking_user_for_iana():
+    current = ItineraryProposal(
+        transports=[
+            TransportCandidate(
+                mode="train",
+                operator="DB",
+                service_number="ICE 105",
+                origin=LocationCandidate(name="Berlin", city="Berlin"),
+                destination=LocationCandidate(name="Cologne", city="Cologne"),
+                departure_at="2026-10-26T08:00:00",
+                arrival_at="2026-10-26T12:00:00",
+                source_excerpt="DB ICE 105 Berlin to Cologne",
+            )
+        ]
+    )
+
+    merged = merge_conversation_draft(
+        "DB ICE 105 Berlin to Cologne 2026-10-26 08:00 12:00",
+        "DB ICE 105 Berlin to Cologne 2026-10-26 08:00 12:00",
+        ItineraryProposal(),
+        current,
+    )
+
+    item = merged.transports[0]
+    assert item.origin.timezone == "Europe/Berlin"
+    assert item.destination.timezone == "Europe/Berlin"
+    assert "origin.timezone" not in item.missing_fields
+    assert "应用根据城市映射" in merged.warnings[-1]
 
 
 def test_update_and_delete_reservation_http_contract():

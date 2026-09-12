@@ -1,10 +1,11 @@
 # TripFlow Travel Operations Agent
 
-面向自由行用户的行程整理 Agent。用户可以粘贴中英文订单文字，也可以直接填写
-表单；Agent 只生成待确认候选，确认后系统才会写入航班、火车和住宿行程，检查
+面向自由行用户的对话式行程整理 Agent。用户可以从不完整信息开始，Agent 基于
+持久化 structured draft 逐轮补全、处理条件修改与任务切换；信息完整后才弹出确认
+候选。确认后系统才会写入航班、火车和住宿行程，检查
 时间重叠与换乘不足，最后导出带稳定 UID 的 ICS 日历。
 
-v0.8 支持用户直接说“请查询 2026-10-26 的 LH400 航班状态”：Agent 只提取
+v0.9 支持用户先说“帮我查 LH400”，再在下一轮补充日期。Agent 只提取
 有原文证据的航班号与日期，应用代码调用 AeroDataBox，返回带运营商、机场、时区、
 计划时间和运行状态的候选。Provider 候选绑定当前行程、15 分钟过期且只能确认一次；
 未经用户确认不会写入 state。
@@ -30,6 +31,8 @@ flowchart LR
 ### 可靠性边界
 
 - Agent 没有修改行程的工具；候选解析 API 不会改变已确认 state。
+- 对话消息与 structured draft 按行程持久化；不完整字段只触发一次一个的追问。
+- 多轮合并由应用层校验，不能以自然语言回复“已获取”代替结构化字段更新。
 - 航班号与明确日期同时具有用户原文证据时才允许调用 Provider；相对日期不会被模型自行解析。
 - 普通表单不能声明 `provider` 来源；Provider 候选由服务端保存、绑定行程、限时且一次性确认。
 - 航班 API 超时、额度耗尽、无结果与超出免费范围均结构化降级，不会回退到模型猜测。
@@ -127,7 +130,7 @@ python evals/run_agent_eval.py --category decision
 python evals/run_agent_eval.py --all
 ```
 
-当前确定性测试为 144/144。TripFlow Eval 数据集覆盖 100 个 case。原 90-case
+当前确定性测试为 151/151。TripFlow Eval 数据集覆盖 100 个 case。原 90-case
 抽取集首轮 83/90，针对否定语义增加确定性闸门，并将有原文证据的运营商/产品线分栏
 差异记录为有限等价值后，对同一批真实输出离线 regrade 为 90/90，基础设施失败为 0。
 v0.8 新增 10 个航班查询意图与成本/安全闸门 case，真实模型专项回归 10/10，
@@ -155,7 +158,8 @@ SQLite session 生命周期压测在 200 次请求、并发 20 下为 200/200 �
 TripFlow 使用 `POST /api/trips`、单行程 `GET`、交通/住宿变更、冲突查询与
 `calendar.ics` 导出端点。`POST /api/trips/{id}/proposals/text` 返回 Agent 候选及
 联网航班候选；只有 `POST /api/trips/{id}/providers/flights/confirm` 能把服务端保存的
-Provider 候选写入行程。在尚未引入账号隔离前，公开的全局行程列表被禁用，
+Provider 候选写入行程。v0.9 的 `GET/POST/DELETE /api/trips/{id}/conversation`
+分别恢复、继续和重置行程级对话草稿。在尚未引入账号隔离前，公开的全局行程列表被禁用，
 所有 TripFlow 写操作按 IP 限流；行程 ID 是高熵不可枚举标识符。
 
 同一会话通过 async lock 串行执行，不同会话可以并发。SDK 对话历史、业务
@@ -177,7 +181,7 @@ docker run --rm -p 8000:8000 \
 
 容器以非 root 用户运行，named volume 保存 SQLite 数据。当前限流器是面向单 worker
 部署的进程内保护；横向扩容时应替换为 Redis/API Gateway 限流。GitHub Actions 在
-每次 push/PR 执行 144 项测试、两套 Eval 数据集静态校验、JavaScript/Python
+每次 push/PR 执行 151 项测试、两套 Eval 数据集静态校验、JavaScript/Python
 语法检查和 Docker 构建；
 CI 不读取线上密钥，也不会产生模型费用。
 
@@ -206,7 +210,7 @@ python scripts/load_test.py --target session --requests 200 --concurrency 20
 
 ```text
 agent.py / tools.py / state.py     Agent reliability core
-tripflow_agent.py                  grounded typed proposal extraction
+tripflow_agent.py                  grounded extraction and multi-turn draft merging
 flight_provider.py                 bounded AeroDataBox lookup and candidate store
 tripflow_models.py / service.py    versioned itinerary and provenance
 tripflow_conflicts.py              deterministic timeline checks

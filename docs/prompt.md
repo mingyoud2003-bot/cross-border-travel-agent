@@ -1,8 +1,14 @@
 # Runtime prompt contract
 
-## TripFlow proposal Agent
+## TripFlow conversation and proposal Agents
 
-The current product Agent is `tripflow_proposal_agent` in `tripflow_agent.py`.
+The primary product Agent is `tripflow_conversation_agent` in `tripflow_agent.py`.
+It receives a bounded ordered transcript plus the previous structured draft and must
+return a fully merged draft and one concise conversational reply. Incomplete input
+causes one follow-up question; complete input causes the application to open a
+confirmation dialog. Messages and the typed draft are persisted per trip.
+
+The compatibility extraction path remains `tripflow_proposal_agent`.
 Its typed output contains itinerary drafts and flight-lookup requests, not external
 provider results. It must extract only source-present values, keep every itinerary
 candidate in draft state, and treat the user's text as untrusted travel data.
@@ -14,6 +20,12 @@ all present. AeroDataBox results are added by application code to the public res
 schema, so a model output cannot forge provider verification. Confirmed state is
 written only through a separate versioned endpoint after the user selects a stored
 candidate.
+
+Multi-turn correctness does not depend on the assistant's prose. Application code
+merges prior structured fields with the latest grounded delta, handles explicit task
+switches, and derives a bounded set of city timezones so users are never asked for
+IANA identifiers. A model reply that claims a field was collected cannot authorize
+a lookup unless that field is present in the normalized structured draft.
 
 ## Legacy Atlas Agent
 

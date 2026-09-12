@@ -3,97 +3,108 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TripFlow · Trusted itinerary</title>
+  <title>TripFlow · 对话式行程整理</title>
   <link rel="stylesheet" href="/static/tripflow.css">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/"><span>TF</span> TripFlow</a>
-    <p>Trusted itinerary, before it reaches your calendar.</p>
+    <p>先对话补全，再确认进入行程。</p>
   </header>
 
   <main>
-    <section class="hero">
-      <p class="eyebrow">TRAVEL OPERATIONS AGENT</p>
-      <h1>把零散订单，变成可核验的行程。</h1>
-      <p class="lede">用一段话添加航班、火车与住宿；支持按航班号和日期联网核验，确认后检查衔接冲突，再导出日历。</p>
-    </section>
-
-    <section class="capability-card" aria-label="当前联网能力">
-      <div><p class="eyebrow">LIVE DATA · BETA</p><strong>当前联网能力与边界</strong></div>
-      <ul>
-        <li><b>航班</b>：AeroDataBox 覆盖范围内，按航班号与明确出发日期查询；不提供票价、余票或购票。</li>
-        <li><b>铁路</b>：当前支持任意运营商的用户确认信息；跨运营商联网查询尚未开放。</li>
-        <li><b>住宿</b>：当前整理用户提供的订单；不查询房价与库存。</li>
-      </ul>
-      <p>联网结果仍须用户确认。查不到或数据源异常时会明确降级，不会生成虚构行程。</p>
+    <section class="hero compact-hero">
+      <p class="eyebrow">CONVERSATIONAL TRAVEL OPERATIONS</p>
+      <h1>告诉我已有的信息，剩下的逐步补齐。</h1>
+      <p class="lede">可以只说“帮我查 LH400”或“我订了柏林的酒店”。信息完整后才会出现确认卡，未经确认不会写入行程。</p>
     </section>
 
     <section id="create-view" class="card create-card">
-      <div>
-        <p class="eyebrow">START A TRIP</p>
-        <h2>无需上传截图，先创建一次行程</h2>
-      </div>
+      <div><p class="eyebrow">START A TRIP</p><h2>创建一个行程工作区</h2></div>
       <form id="create-form">
-        <label>行程名称<input id="trip-title" required maxlength="120" placeholder="例如：2026 德国与法国"></label>
-        <label>最低换乘缓冲（分钟）<input id="min-connection" type="number" min="0" max="1440" value="90"></label>
-        <button type="submit" class="primary">创建行程</button>
+        <label>行程名称<input id="trip-title" required maxlength="120" placeholder="例如：2026 欧洲秋游"></label>
+        <label>换乘缓冲<select id="min-connection"><option value="60">60 分钟</option><option value="90" selected>90 分钟</option><option value="120">120 分钟</option></select></label>
+        <button type="submit" class="primary">开始整理</button>
       </form>
     </section>
 
     <section id="workspace" class="workspace hidden">
-      <aside class="panel input-panel">
+      <section class="panel chat-panel">
         <div class="section-head">
-          <div><p class="eyebrow">QUICK ADD</p><h2>一句话填充</h2></div>
-          <button id="sample" class="ghost" type="button">填入示例</button>
+          <div><p class="eyebrow">TRIP ASSISTANT</p><h2>对话整理</h2></div>
+          <button id="reset-chat" class="ghost mini" type="button">新任务</button>
         </div>
-        <textarea id="quick-text" rows="5" placeholder="例如：请查询 2026-09-12 的 LH400 航班状态"></textarea>
-        <button id="parse-text" class="secondary" type="button">Agent 解析 / 联网核验</button>
-        <p id="proposal-note" class="notice hidden"></p>
-        <div id="provider-results" class="provider-results hidden" aria-live="polite"></div>
-
-        <div class="divider"></div>
-        <p class="eyebrow">CONFIRMED FORM</p>
-        <h2>添加交通</h2>
-        <form id="transport-form" class="form-grid">
-          <label>类型<select id="mode"><option value="train">火车</option><option value="flight">航班</option></select></label>
-          <label>运营商<input id="operator" required placeholder="Deutsche Bahn / SNCF / 中国铁路"></label>
-          <label>车次 / 航班号<input id="service-number" placeholder="ICE 105"></label>
-          <span></span>
-          <label>出发站<input id="origin-name" required placeholder="Berlin Hbf"></label>
-          <label>出发城市<input id="origin-city" required placeholder="Berlin"></label>
-          <label>出发时区<input id="origin-timezone" required value="Europe/Berlin"></label>
-          <label>出发当地时间<input id="departure-at" required type="datetime-local"></label>
-          <label>到达站<input id="destination-name" required placeholder="Köln Hbf"></label>
-          <label>到达城市<input id="destination-city" required placeholder="Cologne"></label>
-          <label>到达时区<input id="destination-timezone" required value="Europe/Berlin"></label>
-          <label>到达当地时间<input id="arrival-at" required type="datetime-local"></label>
-          <button id="transport-submit" class="primary full" type="submit">确认并加入行程</button>
+        <div id="chat-messages" class="chat-messages" aria-live="polite">
+          <div class="message assistant"><span>TF</span><p>你好，我可以帮你整理航班、火车和住宿。你现在掌握哪些信息？</p></div>
+        </div>
+        <div class="suggestion-row">
+          <button class="suggestion" type="button" data-message="帮我查一趟航班">查航班</button>
+          <button class="suggestion" type="button" data-message="我想添加一段火车行程">加火车</button>
+          <button class="suggestion" type="button" data-message="我想添加住宿">加住宿</button>
+        </div>
+        <form id="chat-form" class="chat-composer">
+          <textarea id="chat-input" rows="3" maxlength="2000" placeholder="例如：帮我查 LH400"></textarea>
+          <div><small>Enter 发送 · Shift + Enter 换行</small><button id="chat-send" class="primary" type="submit">发送</button></div>
         </form>
+      </section>
 
-        <div class="divider"></div>
-        <p class="eyebrow">STAY</p>
-        <h2>添加住宿</h2>
-        <form id="stay-form" class="form-grid form-section">
-          <label>酒店 / 住宿名称<input id="property-name" required placeholder="Hotel AMANO Grand Central"></label>
-          <label>城市<input id="stay-city" required placeholder="Berlin"></label>
-          <label class="full">地址（可选）<input id="stay-address" placeholder="Heidestraße 62"></label>
-          <label>入住日期<input id="check-in" required type="date"></label>
-          <label>退房日期<input id="check-out" required type="date"></label>
-          <button id="stay-submit" class="primary full" type="submit">确认并加入行程</button>
-        </form>
-      </aside>
-
-      <section class="panel timeline-panel">
+      <aside class="panel itinerary-panel">
         <div class="section-head">
-          <div><p class="eyebrow">ITINERARY</p><h2 id="active-title"></h2></div>
+          <div><p class="eyebrow">CONFIRMED ITINERARY</p><h2 id="active-title"></h2></div>
           <a id="ics-link" class="ghost button-link" href="#">导出 ICS</a>
         </div>
         <div id="conflicts" class="conflicts"></div>
-        <div id="timeline" class="timeline"><p class="empty">还没有行程。可以用一句话填充，或直接使用表单。</p></div>
-      </section>
+        <div id="timeline" class="timeline"><p class="empty">尚无已确认行程。与左侧 Agent 对话，或使用下方快捷添加。</p></div>
+
+        <details id="manual-panel" class="manual-panel">
+          <summary><span><b>快捷手动添加</b><small>只填写必要信息</small></span><span>＋</span></summary>
+          <div class="manual-body">
+            <label>添加类型<select id="manual-kind"><option value="transport">交通</option><option value="stay">住宿</option></select></label>
+            <form id="transport-form" class="compact-form">
+              <div class="two-fields">
+                <label>交通方式<select id="mode"><option value="train">火车</option><option value="flight">航班</option></select></label>
+                <label>运营商<input id="operator" required list="operator-options" placeholder="点选或输入"></label>
+              </div>
+              <label>车次 / 航班号（可选）<input id="service-number" placeholder="ICE 105 / LH400"></label>
+              <div class="route-fields">
+                <label>出发城市<input id="origin-city" required list="city-options" placeholder="点选城市"></label><span>→</span>
+                <label>到达城市<input id="destination-city" required list="city-options" placeholder="点选城市"></label>
+              </div>
+              <div class="two-fields">
+                <label>出发时间<input id="departure-at" required type="datetime-local"></label>
+                <label>到达时间<input id="arrival-at" required type="datetime-local"></label>
+              </div>
+              <details class="advanced-fields">
+                <summary>站点与时区（已按城市自动选择）</summary>
+                <div class="two-fields">
+                  <label>出发站 / 机场<input id="origin-name" placeholder="默认使用城市名"></label>
+                  <label>到达站 / 机场<input id="destination-name" placeholder="默认使用城市名"></label>
+                  <label>出发时区<select id="origin-timezone"></select></label>
+                  <label>到达时区<select id="destination-timezone"></select></label>
+                </div>
+              </details>
+              <button id="transport-submit" class="primary full" type="submit">确认添加交通</button>
+            </form>
+            <form id="stay-form" class="compact-form hidden">
+              <label>酒店 / 住宿名称<input id="property-name" required placeholder="例如：Hotel AMANO"></label>
+              <label>城市<input id="stay-city" required list="city-options" placeholder="点选或输入城市"></label>
+              <div class="two-fields"><label>入住日期<input id="check-in" required type="date"></label><label>退房日期<input id="check-out" required type="date"></label></div>
+              <button id="stay-submit" class="primary full" type="submit">确认添加住宿</button>
+            </form>
+          </div>
+        </details>
+      </aside>
     </section>
   </main>
+
+  <dialog id="candidate-dialog" class="candidate-dialog">
+    <div class="dialog-head"><div><p class="eyebrow">REVIEW BEFORE SAVE</p><h2>请核对候选信息</h2></div><button id="close-dialog" class="ghost" type="button">暂不添加</button></div>
+    <p class="dialog-note">Agent 和联网数据只生成候选。只有点击确认，内容才会进入右侧行程。</p>
+    <div id="candidate-content" class="candidate-content"></div>
+  </dialog>
+
+  <datalist id="operator-options"><option value="Deutsche Bahn"><option value="SNCF"><option value="ÖBB"><option value="Eurostar"><option value="Trenitalia"><option value="Renfe"><option value="中国铁路"><option value="JR"><option value="Lufthansa"><option value="Air China"><option value="British Airways"><option value="Singapore Airlines"></datalist>
+  <datalist id="city-options"><option value="Berlin"><option value="Cologne"><option value="Frankfurt"><option value="Munich"><option value="Paris"><option value="London"><option value="Vienna"><option value="Zurich"><option value="Rome"><option value="Madrid"><option value="Barcelona"><option value="Amsterdam"><option value="Brussels"><option value="Beijing"><option value="Shanghai"><option value="Wuhan"><option value="Tokyo"><option value="Osaka"><option value="Singapore"><option value="New York"></datalist>
   <div id="toast" role="status" aria-live="polite"></div>
   <script src="/static/tripflow.js" defer></script>
 </body>

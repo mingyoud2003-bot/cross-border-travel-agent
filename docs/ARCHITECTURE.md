@@ -1,13 +1,15 @@
 # Architecture and design decisions
 
-## TripFlow v0.8 system boundary
+## TripFlow v0.9 system boundary
 
 TripFlow separates language understanding, external data, and state mutation:
 
 ```text
-User text
+Multi-turn user messages
    |
-typed Agent proposal (no write tools, no provider result fields)
+persisted transcript + structured draft
+   |
+typed Agent turn (reply + full draft; no write tools/provider results)
    |
 deterministic evidence and intent gate
    |                         \
@@ -29,6 +31,11 @@ endpoints reject client-declared `provider` provenance.
 This creates three useful failure domains: model extraction can fail without
 mutating state, provider lookup can fail without model guessing, and a stale UI can
 hit an `If-Match` conflict without overwriting a newer itinerary.
+
+The browser keeps conversation and unconfirmed candidates on the left, while the
+confirmed itinerary and compact manual entry stay on the right. The review dialog is
+the only bridge between them. Manual entry offers city/operator choices; station and
+timezone overrides are collapsed under advanced settings.
 
 ## Legacy Atlas system boundary
 
@@ -64,6 +71,8 @@ For TripFlow, the current invariants are:
 4. Provider failure, quota exhaustion, no result, and date-range rejection are
    structured outcomes, never invitations for the model to fill a gap.
 5. Every write requires the caller's current itinerary version.
+6. A prose reply cannot update structured state; prior grounded fields and the latest
+   delta are merged and normalized by application code.
 
 The retained Atlas control plane adds these legacy decision-workflow invariants:
 

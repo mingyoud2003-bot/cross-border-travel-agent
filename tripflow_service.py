@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from datetime import UTC, datetime
@@ -47,6 +48,16 @@ class TripFlowService:
             )
             """
         )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tripflow_conversations (
+                trip_id TEXT PRIMARY KEY,
+                conversation_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (trip_id) REFERENCES tripflow_trips(trip_id)
+            )
+            """
+        )
         self._connection.commit()
 
     def close(self) -> None:
@@ -76,11 +87,51 @@ class TripFlowService:
 
     def delete_trip(self, trip_id: str) -> bool:
         with self._lock:
+            self._connection.execute(
+                "DELETE FROM tripflow_conversations WHERE trip_id = ?", (trip_id,)
+            )
             cursor = self._connection.execute(
                 "DELETE FROM tripflow_trips WHERE trip_id = ?", (trip_id,)
             )
             self._connection.commit()
         return cursor.rowcount > 0
+
+    def get_conversation(self, trip_id: str) -> dict:
+        self.get_trip(trip_id)
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT conversation_json FROM tripflow_conversations WHERE trip_id = ?",
+                (trip_id,),
+            ).fetchone()
+        if row is None:
+            return {"messages": [], "draft": {}}
+        value = json.loads(row[0])
+        return value if isinstance(value, dict) else {"messages": [], "draft": {}}
+
+    def save_conversation(self, trip_id: str, value: dict) -> None:
+        self.get_trip(trip_id)
+        now = datetime.now(UTC).isoformat()
+        serialized = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        with self._lock:
+            self._connection.execute(
+                """
+                INSERT INTO tripflow_conversations (trip_id, conversation_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(trip_id) DO UPDATE SET
+                    conversation_json = excluded.conversation_json,
+                    updated_at = excluded.updated_at
+                """,
+                (trip_id, serialized, now),
+            )
+            self._connection.commit()
+
+    def clear_conversation(self, trip_id: str) -> None:
+        self.get_trip(trip_id)
+        with self._lock:
+            self._connection.execute(
+                "DELETE FROM tripflow_conversations WHERE trip_id = ?", (trip_id,)
+            )
+            self._connection.commit()
 
     def add_transport(
         self,

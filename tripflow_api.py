@@ -15,10 +15,15 @@ from flight_provider import (
     ProviderCandidateError,
 )
 from tripflow_agent import (
+    AgentsConversationService,
     AgentsProposalService,
+    ConversationMessage,
+    ConversationService,
+    ConversationState,
     ItineraryProposal,
     ProposalService,
     ProposalUnavailableError,
+    proposal_ready,
 )
 from tripflow_models import CreateTripInput, StayInput, TransportInput, Trip
 from tripflow_service import (
@@ -41,16 +46,22 @@ class ProviderConfirmationRequest(BaseModel):
     )
 
 
+class ConversationRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+
+
 def build_tripflow_router(
     service: TripFlowService,
     proposal_service: ProposalService | None = None,
     flight_provider: FlightProvider | None = None,
+    conversation_service: ConversationService | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/trips", tags=["TripFlow"])
     proposals = proposal_service or AgentsProposalService()
     flights = flight_provider or AeroDataBoxFlightProvider(
         os.environ.get("AERODATABOX_RAPIDAPI_KEY")
     )
+    conversations = conversation_service or AgentsConversationService()
 
     @router.post("", response_model=Trip, status_code=201)
     def create_trip(payload: CreateTripInput) -> Trip:
@@ -185,35 +196,60 @@ def build_tripflow_router(
             proposal = await proposals.propose(payload.text.strip())
         except ProposalUnavailableError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
-        for lookup in proposal.flight_lookups:
-            if not lookup.flight_number or not lookup.departure_date:
-                continue
-            try:
-                outcome = await run_in_threadpool(
-                    flights.lookup,
-                    lookup.flight_number,
-                    lookup.departure_date,
-                    trip_id=trip_id,
-                )
-            except Exception:
-                # A provider adapter is an external failure boundary. Do not let
-                # an unexpected SDK/payload error turn a usable itinerary draft
-                # into a 500, and never ask the model to fill the missing data.
-                logger.exception(
-                    "flight_provider_unexpected_error",
-                    extra={"provider": "aerodatabox", "flight_number": lookup.flight_number},
-                )
-                outcome = FlightLookupOutcome(
-                    flight_number=lookup.flight_number,
-                    departure_date=lookup.departure_date,
-                    status="unavailable",
-                    message="航班数据源暂时不可用，未使用未经核验的数据。",
-                )
-            proposal.provider_lookups.append(outcome)
-            if outcome.status != "found":
-                proposal.warnings.append(outcome.message)
-        proposal.warnings = list(dict.fromkeys(proposal.warnings))
+        await _populate_provider_lookups(proposal, flights, trip_id)
         return proposal
+
+    @router.get("/{trip_id}/conversation", response_model=ConversationState)
+    def get_conversation(trip_id: str) -> ConversationState:
+        try:
+            return ConversationState.model_validate(service.get_conversation(trip_id))
+        except TripNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="trip not found") from exc
+
+    @router.post("/{trip_id}/conversation", response_model=ConversationState)
+    async def continue_conversation(
+        trip_id: str, payload: ConversationRequest
+    ) -> ConversationState:
+        try:
+            state = ConversationState.model_validate(service.get_conversation(trip_id))
+        except TripNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="trip not found") from exc
+        user_message = payload.message.strip()
+        if not user_message:
+            raise HTTPException(status_code=422, detail="message must not be blank")
+        pending_messages = [
+            *state.messages,
+            ConversationMessage(role="user", content=user_message),
+        ][-30:]
+        try:
+            assistant_message, proposal = await conversations.respond(
+                pending_messages, state.draft
+            )
+        except ProposalUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        await _populate_provider_lookups(proposal, flights, trip_id)
+        ready = proposal_ready(proposal)
+        state = ConversationState(
+            messages=[
+                *pending_messages,
+                ConversationMessage(
+                    role="assistant",
+                    content=_conversation_reply(assistant_message, proposal, ready),
+                ),
+            ][-30:],
+            draft=proposal,
+            ready_for_confirmation=ready,
+        )
+        service.save_conversation(trip_id, state.model_dump(mode="json"))
+        return state
+
+    @router.delete("/{trip_id}/conversation", response_model=ConversationState)
+    def reset_conversation(trip_id: str) -> ConversationState:
+        try:
+            service.clear_conversation(trip_id)
+        except TripNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="trip not found") from exc
+        return ConversationState()
 
     @router.post(
         "/{trip_id}/providers/flights/confirm",
@@ -253,3 +289,64 @@ def _reject_client_provider_source(payload: TransportInput | StayInput) -> None:
             status_code=422,
             detail="Provider 来源只能通过服务端航班候选确认端点写入。",
         )
+
+
+async def _populate_provider_lookups(
+    proposal: ItineraryProposal,
+    flights: FlightProvider,
+    trip_id: str,
+) -> None:
+    proposal.provider_lookups = []
+    for lookup in proposal.flight_lookups:
+        if not lookup.flight_number or not lookup.departure_date:
+            continue
+        try:
+            outcome = await run_in_threadpool(
+                flights.lookup,
+                lookup.flight_number,
+                lookup.departure_date,
+                trip_id=trip_id,
+            )
+        except Exception:
+            logger.exception(
+                "flight_provider_unexpected_error",
+                extra={"provider": "aerodatabox", "flight_number": lookup.flight_number},
+            )
+            outcome = FlightLookupOutcome(
+                flight_number=lookup.flight_number,
+                departure_date=lookup.departure_date,
+                status="unavailable",
+                message="航班数据源暂时不可用，未使用未经核验的数据。",
+            )
+        proposal.provider_lookups.append(outcome)
+        if outcome.status != "found":
+            proposal.warnings.append(outcome.message)
+    proposal.warnings = list(dict.fromkeys(proposal.warnings))
+
+
+def _conversation_reply(
+    model_reply: str,
+    proposal: ItineraryProposal,
+    ready: bool,
+) -> str:
+    if ready:
+        return "信息已经整理好了。我打开了确认卡，请核对后决定是否加入行程。"
+    if proposal.provider_lookups:
+        return proposal.provider_lookups[0].message
+    missing_lookup = [
+        field
+        for lookup in proposal.flight_lookups
+        for field in lookup.missing_fields
+    ]
+    if "flight_number" in missing_lookup:
+        return "可以，请告诉我航班号，例如 LH400。"
+    if "departure_date" in missing_lookup:
+        return "还需要这趟航班的明确出发日期，例如 2026-10-26。"
+    incomplete = [
+        field
+        for item in [*proposal.transports, *proposal.stays]
+        for field in item.missing_fields
+    ]
+    if incomplete:
+        return model_reply or "还缺少一项关键信息，请继续补充。"
+    return model_reply or "你可以告诉我要整理的航班、火车或住宿信息。"

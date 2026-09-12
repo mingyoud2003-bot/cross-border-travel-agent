@@ -9,22 +9,26 @@ python scripts/demo_product.py
 
 ## Story
 
-1. In TripFlow, ask to check a specific flight with a date. Show that the Agent
-   extracts a grounded lookup request and the provider returns a candidate, while
-   the confirmed timeline is still unchanged.
-2. Confirm the matching candidate. Show server-owned provider provenance, the
+1. In TripFlow, say only `帮我查 LH400`. Show that the Agent asks only for the exact
+   departure date and no provider call occurs yet.
+2. Reply `出发日期是 2026-09-12`. Show the structured draft combining both turns and
+   the provider candidate appearing in a review dialog, while the timeline remains
+   unchanged.
+3. Confirm the matching candidate. Show server-owned provider provenance, the
    version increment, conflict detection, and ICS export. Contrast this with a broad
    “北京到巴黎机票多少钱” request, which must not spend a provider call.
-3. In the legacy view, submit a decision request without taxes. Show that the Agent asks only for the
+4. Expand the right-side compact manual entry: city and operator are selectable;
+   station and timezone overrides stay outside the primary flow.
+5. In the legacy view, submit a decision request without taxes. Show that the Agent asks only for the
    missing value and does not call an unauthorized tool.
-4. Add taxes and BA Silver status. Show the ordered railway, deterministic mileage,
+6. Add taxes and BA Silver status. Show the ordered railway, deterministic mileage,
    grounded loyalty, and decision-composer calls in Trace; show turn-level provenance
    in State.
-5. Change only the cash price. Show that the railway and loyalty results are retained,
+7. Change only the cash price. Show that the railway and loyalty results are retained,
    mileage is recomputed, and the recommendation changes.
-6. Refresh/restart the service and reopen the session endpoint to demonstrate SQLite
+8. Refresh/restart the service and reopen the session endpoint to demonstrate SQLite
    persistence.
-7. Open `/metrics` and the Eval report to connect the UI behavior to operational and
+9. Open `/metrics` and the Eval report to connect the UI behavior to operational and
    regression evidence.
 
 ## Interview explanation

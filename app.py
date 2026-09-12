@@ -67,8 +67,8 @@ def create_app(
 
     api = FastAPI(
         title="TripFlow Travel Operations Agent",
-        version="0.8.0",
-        description="A confirmation-gated itinerary workspace with traceable AI extraction and bounded provider verification.",
+        version="0.9.0",
+        description="A conversational, confirmation-gated itinerary workspace with structured draft state and bounded provider verification.",
         lifespan=lifespan,
     )
     api.include_router(build_tripflow_router(tripflow, flight_provider=flight_data))

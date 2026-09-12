@@ -210,3 +210,23 @@ def test_stay_exports_as_all_day_event_and_can_be_deleted():
     )
     assert trip.reservations == []
     assert trip.version == 3
+
+
+def test_conversation_state_persists_and_is_deleted_with_trip(tmp_path):
+    db_path = tmp_path / "conversation.db"
+    first = TripFlowService(db_path)
+    trip = first.create_trip(CreateTripInput(title="Conversation"))
+    first.save_conversation(
+        trip.id,
+        {"messages": [{"role": "user", "content": "查 LH400"}], "draft": {}},
+    )
+    first.close()
+
+    restored = TripFlowService(db_path)
+    assert restored.get_conversation(trip.id)["messages"][0]["content"] == "查 LH400"
+    assert restored.delete_trip(trip.id) is True
+    remaining = restored._connection.execute(
+        "SELECT COUNT(*) FROM tripflow_conversations"
+    ).fetchone()[0]
+    assert remaining == 0
+    restored.close()
