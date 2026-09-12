@@ -89,6 +89,10 @@ def test_provider_maps_response_caches_and_preserves_server_provenance():
     assert second.cached is True
     assert len(session.calls) == 1
     candidate = first.candidates[0]
+    assert candidate.origin.city == "法兰克福"
+    assert candidate.origin.city_id == "DEFRA"
+    assert candidate.destination.city == "纽约"
+    assert candidate.destination.city_id == "USNYC"
     assert candidate.origin.timezone == "Europe/Berlin"
     assert candidate.destination.timezone == "America/New_York"
     assert candidate.data_quality == ["Basic", "Live"]

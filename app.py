@@ -67,7 +67,7 @@ def create_app(
 
     api = FastAPI(
         title="TripFlow Travel Operations Agent",
-        version="0.9.0",
+        version="0.9.1",
         description="A conversational, confirmation-gated itinerary workspace with structured draft state and bounded provider verification.",
         lifespan=lifespan,
     )

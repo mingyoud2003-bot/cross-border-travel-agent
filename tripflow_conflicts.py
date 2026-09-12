@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from hashlib import sha256
 
-from tripflow_models import Conflict, TransportReservation, Trip
+from tripflow_models import Conflict, Location, TransportReservation, Trip
 
 
 def detect_conflicts(trip: Trip) -> list[Conflict]:
@@ -38,9 +38,7 @@ def detect_conflicts(trip: Trip) -> list[Conflict]:
     for current, following in zip(transports, transports[1:]):
         if following.departure_at < current.arrival_at:
             continue
-        if _normalize_city(current.destination.city) != _normalize_city(
-            following.origin.city
-        ):
+        if not _same_city(current.destination, following.origin):
             continue
         buffer_minutes = int(
             (following.departure_at - current.arrival_at).total_seconds() // 60
@@ -72,6 +70,12 @@ def _normalize_city(value: str) -> str:
     return "".join(value.casefold().split())
 
 
+def _same_city(first: Location, second: Location) -> bool:
+    if first.city_id and second.city_id:
+        return first.city_id == second.city_id
+    return _normalize_city(first.city) == _normalize_city(second.city)
+
+
 def _conflict(
     conflict_type: str,
     severity: str,
@@ -91,4 +95,3 @@ def _conflict(
         message=message,
         evidence=evidence,
     )
-

@@ -457,6 +457,49 @@ def test_proposal_normalizer_recomputes_missing_timezones():
     ]
 
 
+def test_proposal_normalizer_canonicalizes_grounded_bilingual_city():
+    text = "DB 从柏林到 Köln Hbf"
+    proposal = ItineraryProposal(
+        transports=[
+            TransportCandidate(
+                mode="train",
+                operator="DB",
+                origin=LocationCandidate(name="柏林", city="Berlin"),
+                destination=LocationCandidate(name="Köln Hbf", city="Cologne"),
+                source_excerpt=text,
+            )
+        ]
+    )
+
+    item = normalize_proposal(text, proposal).transports[0]
+
+    assert item.origin.city == "柏林"
+    assert item.destination.city == "科隆"
+
+
+def test_proposal_normalizer_removes_city_and_station_not_in_user_evidence():
+    text = "DB 从 Berlin 到 Cologne"
+    proposal = ItineraryProposal(
+        transports=[
+            TransportCandidate(
+                mode="train",
+                operator="DB",
+                origin=LocationCandidate(name="Berlin Hbf", city="Berlin"),
+                destination=LocationCandidate(name="Atlantis Central", city="Atlantis"),
+                source_excerpt=text,
+            )
+        ]
+    )
+
+    item = normalize_proposal(text, proposal).transports[0]
+
+    assert item.origin.city == "柏林"
+    assert item.origin.name is None
+    assert item.destination.city is None
+    assert item.destination.name is None
+    assert "destination.city" in item.missing_fields
+
+
 def test_proposal_normalizer_removes_inferred_operator_and_partial_datetimes():
     text = "flight MU5100 from Beijing Capital at 07:00 to Shanghai at 09:15"
     proposal = ItineraryProposal(
@@ -626,7 +669,7 @@ def test_explicit_same_domain_new_task_does_not_reuse_old_route():
         current,
     )
 
-    assert merged.transports[0].origin.city == "Paris"
+    assert merged.transports[0].origin.city == "巴黎"
     assert merged.transports[0].destination.city is None
 
 

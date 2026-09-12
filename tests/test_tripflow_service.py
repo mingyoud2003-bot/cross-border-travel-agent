@@ -131,6 +131,41 @@ def test_short_connection_is_detected_deterministically():
     assert conflicts[0].evidence["buffer_minutes"] == 45
 
 
+def test_short_connection_matches_chinese_and_english_city_aliases():
+    service = TripFlowService()
+    trip = service.create_trip(
+        CreateTripInput(title="Bilingual connection", minimum_connection_minutes=90)
+    )
+    trip = service.add_transport(
+        trip.id,
+        transport(
+            "SNCF", "TGV 1", "Paris Est", "Paris", "Frankfurt Hbf",
+            "法兰克福", "2026-09-16T07:00:00+02:00",
+            "2026-09-16T10:00:00+02:00",
+        ),
+        expected_version=trip.version,
+    )
+    service.add_transport(
+        trip.id,
+        transport(
+            "Lufthansa", "LH400", "Frankfurt Airport", "Frankfurt",
+            "JFK", "New York", "2026-09-16T10:55:00+02:00",
+            "2026-09-16T13:35:00-04:00",
+        ),
+        expected_version=trip.version,
+    )
+
+    conflicts = service.conflicts(trip.id)
+
+    assert len(conflicts) == 1
+    assert conflicts[0].type == "short_connection"
+    assert conflicts[0].evidence == {
+        "connection_city": "法兰克福",
+        "buffer_minutes": 55,
+        "required_minutes": 90,
+    }
+
+
 def test_ics_export_has_stable_uids_and_utc_times():
     service = TripFlowService()
     trip = service.create_trip(CreateTripInput(title="Calendar"))

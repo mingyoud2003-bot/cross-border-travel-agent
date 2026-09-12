@@ -7,6 +7,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from location_catalog import resolve_city
+
 
 SourceType = Literal["form", "text", "pdf", "image", "provider"]
 ReservationStatus = Literal["draft", "confirmed", "cancelled"]
@@ -39,6 +41,7 @@ class SourceInput(BaseModel):
 class Location(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     city: str = Field(min_length=1, max_length=100)
+    city_id: str | None = Field(default=None, max_length=16)
     timezone: str = Field(min_length=1, max_length=64)
 
     @field_validator("name", "city", "timezone")
@@ -54,6 +57,17 @@ class Location(BaseModel):
         except ZoneInfoNotFoundError as exc:
             raise ValueError("timezone must be a valid IANA timezone") from exc
         return value
+
+    @model_validator(mode="after")
+    def canonicalize_city(self) -> "Location":
+        city = resolve_city(self.city, self.timezone)
+        if city:
+            self.city = city.display_name
+            self.city_id = city.city_id
+        else:
+            # Never trust a client/model supplied identity for an unresolved city.
+            self.city_id = None
+        return self
 
 
 class CreateTripInput(BaseModel):
@@ -117,6 +131,7 @@ class TransportInput(BaseModel):
 class StayInput(BaseModel):
     property_name: str = Field(min_length=1, max_length=160)
     city: str = Field(min_length=1, max_length=100)
+    city_id: str | None = Field(default=None, max_length=16)
     address: str | None = Field(default=None, max_length=300)
     check_in: date
     check_out: date
@@ -132,6 +147,16 @@ class StayInput(BaseModel):
     def chronological(self) -> "StayInput":
         if self.check_out <= self.check_in:
             raise ValueError("check_out must be later than check_in")
+        return self
+
+    @model_validator(mode="after")
+    def canonicalize_city(self) -> "StayInput":
+        city = resolve_city(self.city)
+        if city:
+            self.city = city.display_name
+            self.city_id = city.city_id
+        else:
+            self.city_id = None
         return self
 
 
@@ -157,6 +182,7 @@ class StayReservation(BaseModel):
     kind: Literal["stay"] = "stay"
     property_name: str
     city: str
+    city_id: str | None = None
     address: str | None
     check_in: date
     check_out: date
@@ -165,6 +191,16 @@ class StayReservation(BaseModel):
     provenance: dict[str, FieldProvenance]
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+
+    @model_validator(mode="after")
+    def canonicalize_city(self) -> "StayReservation":
+        city = resolve_city(self.city)
+        if city:
+            self.city = city.display_name
+            self.city_id = city.city_id
+        else:
+            self.city_id = None
+        return self
 
 
 Reservation = Annotated[

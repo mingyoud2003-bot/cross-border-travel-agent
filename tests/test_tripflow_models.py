@@ -30,6 +30,33 @@ def test_location_rejects_unknown_timezone():
         location("Somewhere", "City", "Europe/Not-A-Real-Zone")
 
 
+def test_location_canonicalizes_chinese_and_english_city_to_same_identity():
+    english = location("Frankfurt Airport", "Frankfurt")
+    chinese = location("法兰克福中央火车站", "法兰克福")
+
+    assert english.city == chinese.city == "法兰克福"
+    assert english.city_id == chinese.city_id == "DEFRA"
+
+
+def test_location_does_not_trust_identity_for_an_unresolved_city():
+    item = Location(
+        name="Atlantis Central",
+        city="Atlantis",
+        city_id="USNYC",
+        timezone="Etc/UTC",
+    )
+
+    assert item.city == "Atlantis"
+    assert item.city_id is None
+
+
+def test_location_does_not_map_city_when_timezone_contradicts_catalog():
+    item = location("Paris", "Paris", "America/New_York")
+
+    assert item.city == "Paris"
+    assert item.city_id is None
+
+
 def test_transport_resolves_local_form_time_with_explicit_location_timezone():
     item = TransportInput(
         mode="train",

@@ -19,16 +19,19 @@ python scripts/demo_product.py
    “北京到巴黎机票多少钱” request, which must not spend a provider call.
 4. Expand the right-side compact manual entry: city and operator are selectable;
    station and timezone overrides stay outside the primary flow.
-5. In the legacy view, submit a decision request without taxes. Show that the Agent asks only for the
+5. Add a train arriving in `法兰克福` at 10:00 and a flight leaving `Frankfurt`
+   at 10:55 with a 90-minute threshold. Show the unified `DEFRA` identity, Chinese
+   city display, and deterministic 55-minute connection warning.
+6. In the legacy view, submit a decision request without taxes. Show that the Agent asks only for the
    missing value and does not call an unauthorized tool.
-6. Add taxes and BA Silver status. Show the ordered railway, deterministic mileage,
+7. Add taxes and BA Silver status. Show the ordered railway, deterministic mileage,
    grounded loyalty, and decision-composer calls in Trace; show turn-level provenance
    in State.
-7. Change only the cash price. Show that the railway and loyalty results are retained,
+8. Change only the cash price. Show that the railway and loyalty results are retained,
    mileage is recomputed, and the recommendation changes.
-8. Refresh/restart the service and reopen the session endpoint to demonstrate SQLite
+9. Refresh/restart the service and reopen the session endpoint to demonstrate SQLite
    persistence.
-9. Open `/metrics` and the Eval report to connect the UI behavior to operational and
+10. Open `/metrics` and the Eval report to connect the UI behavior to operational and
    regression evidence.
 
 ## Interview explanation

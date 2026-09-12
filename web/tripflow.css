@@ -52,6 +52,7 @@ button:disabled { opacity:.55; cursor:wait; }
 .item-actions { display:flex; justify-content:flex-end; gap:6px; margin-top:7px; }
 .mini.danger { color:#9b2c2c; }
 .conflict { background:var(--warn-bg); color:var(--warn); border:1px solid #f2d39c; padding:12px 14px; border-radius:12px; margin-bottom:12px; }
+.no-conflicts { color:var(--muted); font-size:.86rem; margin:0 0 12px; }
 .manual-panel { margin-top:22px; border-top:1px solid var(--line); padding-top:16px; }
 .manual-panel > summary,.advanced-fields > summary { cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center; }
 .manual-panel > summary::-webkit-details-marker,.advanced-fields > summary::-webkit-details-marker { display:none; }

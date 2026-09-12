@@ -9,6 +9,7 @@ from agents import Agent, Runner
 from pydantic import BaseModel, Field
 
 from flight_provider import FlightLookupOutcome, normalize_flight_number
+from location_catalog import grounded_city, grounded_text_value, timezone_for_city
 
 
 class LocationCandidate(BaseModel):
@@ -302,30 +303,6 @@ def _date_in_text(text: str) -> date | None:
         return None
 
 
-_CITY_TIMEZONES = {
-    "berlin": "Europe/Berlin", "柏林": "Europe/Berlin",
-    "cologne": "Europe/Berlin", "köln": "Europe/Berlin", "科隆": "Europe/Berlin",
-    "frankfurt": "Europe/Berlin", "法兰克福": "Europe/Berlin",
-    "munich": "Europe/Berlin", "慕尼黑": "Europe/Berlin",
-    "paris": "Europe/Paris", "巴黎": "Europe/Paris",
-    "london": "Europe/London", "伦敦": "Europe/London",
-    "vienna": "Europe/Vienna", "维也纳": "Europe/Vienna",
-    "zurich": "Europe/Zurich", "苏黎世": "Europe/Zurich",
-    "rome": "Europe/Rome", "罗马": "Europe/Rome",
-    "madrid": "Europe/Madrid", "马德里": "Europe/Madrid",
-    "barcelona": "Europe/Madrid", "巴塞罗那": "Europe/Madrid",
-    "amsterdam": "Europe/Amsterdam", "阿姆斯特丹": "Europe/Amsterdam",
-    "brussels": "Europe/Brussels", "布鲁塞尔": "Europe/Brussels",
-    "beijing": "Asia/Shanghai", "北京": "Asia/Shanghai",
-    "shanghai": "Asia/Shanghai", "上海": "Asia/Shanghai",
-    "wuhan": "Asia/Shanghai", "武汉": "Asia/Shanghai",
-    "tokyo": "Asia/Tokyo", "东京": "Asia/Tokyo",
-    "osaka": "Asia/Tokyo", "大阪": "Asia/Tokyo",
-    "singapore": "Asia/Singapore", "新加坡": "Asia/Singapore",
-    "new york": "America/New_York", "纽约": "America/New_York",
-}
-
-
 def _enrich_conversation_locations(proposal: ItineraryProposal) -> None:
     derived = False
     for item in proposal.transports:
@@ -335,10 +312,9 @@ def _enrich_conversation_locations(proposal: ItineraryProposal) -> None:
             if not location.city and location.name:
                 location.city = location.name
             if not location.timezone:
-                haystack = f"{location.city or ''} {location.name or ''}".casefold()
-                location.timezone = next(
-                    (zone for city, zone in _CITY_TIMEZONES.items() if city in haystack),
-                    None,
+                location.timezone = (
+                    timezone_for_city(location.city)
+                    or timezone_for_city(location.name)
                 )
                 derived = derived or location.timezone is not None
         required = {
@@ -386,6 +362,10 @@ def normalize_proposal(
     for item in normalized.transports:
         item.status = "draft"
         item.operator = _grounded_operator(text, item.operator, item.service_number)
+        item.origin.name = grounded_text_value(text, item.origin.name)
+        item.origin.city = grounded_city(text, item.origin.city)
+        item.destination.name = grounded_text_value(text, item.destination.name)
+        item.destination.city = grounded_city(text, item.destination.city)
         item.origin.timezone = _explicit_timezone(text, item.origin.timezone)
         item.destination.timezone = _explicit_timezone(
             text, item.destination.timezone
@@ -410,6 +390,8 @@ def normalize_proposal(
 
     for item in normalized.stays:
         item.status = "draft"
+        item.property_name = grounded_text_value(text, item.property_name)
+        item.city = grounded_city(text, item.city)
         item.check_in = _complete_date(item.check_in)
         item.check_out = _complete_date(item.check_out)
         required = {

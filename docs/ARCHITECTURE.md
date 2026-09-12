@@ -1,6 +1,6 @@
 # Architecture and design decisions
 
-## TripFlow v0.9 system boundary
+## TripFlow v0.9.1 system boundary
 
 TripFlow separates language understanding, external data, and state mutation:
 
@@ -36,6 +36,13 @@ The browser keeps conversation and unconfirmed candidates on the left, while the
 confirmed itinerary and compact manual entry stay on the right. The review dialog is
 the only bridge between them. Manual entry offers city/operator choices; station and
 timezone overrides are collapsed under advanced settings.
+
+Locations separate a canonical city identity from a source-specific facility. A
+bounded bilingual alias catalog maps supported names such as `Frankfurt` and
+`法兰克福` to the same server-owned `DEFRA` identity and Chinese display label.
+Airport and station names remain distinct fields. An unresolved city is preserved
+only when grounded in user/provider evidence, receives no `city_id`, and therefore
+cannot create a false cross-language match.
 
 ## Legacy Atlas system boundary
 
@@ -73,6 +80,8 @@ For TripFlow, the current invariants are:
 5. Every write requires the caller's current itinerary version.
 6. A prose reply cannot update structured state; prior grounded fields and the latest
    delta are merged and normalized by application code.
+7. Client/model supplied city identities are never trusted; canonical IDs are
+   recomputed from a city alias plus a non-contradictory timezone.
 
 The retained Atlas control plane adds these legacy decision-workflow invariants:
 

@@ -24,7 +24,9 @@ candidate.
 Multi-turn correctness does not depend on the assistant's prose. Application code
 merges prior structured fields with the latest grounded delta, handles explicit task
 switches, and derives a bounded set of city timezones so users are never asked for
-IANA identifiers. A model reply that claims a field was collected cannot authorize
+IANA identifiers. The same deterministic layer maps grounded Chinese/English city
+aliases to a server-owned identity; it removes model-proposed cities and facilities
+that do not occur in user evidence. A model reply that claims a field was collected cannot authorize
 a lookup unless that field is present in the normalized structured draft.
 
 ## Legacy Atlas Agent
