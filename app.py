@@ -75,10 +75,11 @@ def create_app(
         request.state.request_id = request_id
         started = time.perf_counter()
         limited_response = None
-        if (
-            request.method == "POST"
-            and request.url.path.endswith("/proposals/text")
-        ):
+        tripflow_write = (
+            request.url.path == "/api/trips"
+            or request.url.path.startswith("/api/trips/")
+        ) and request.method in {"POST", "PUT", "DELETE"}
+        if tripflow_write:
             client_key = request.client.host if request.client else "unknown"
             allowed, retry_after = await limiter.check(client_key)
             if not allowed:

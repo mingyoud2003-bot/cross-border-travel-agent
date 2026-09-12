@@ -113,7 +113,7 @@ python evals/run_agent_eval.py --category decision
 python evals/run_agent_eval.py --all
 ```
 
-当前确定性测试为 131/131。TripFlow 真实 Agent Eval 覆盖 90 个 case：扩展集
+当前确定性测试为 132/132。TripFlow 真实 Agent Eval 覆盖 90 个 case：扩展集
 首轮 83/90，针对否定语义增加确定性闸门，并将有原文证据的运营商/产品线分栏
 差异记录为有限等价值后，对同一批真实输出离线 regrade 为 90/90，基础设施失败为 0。
 原 v0.6 最终
@@ -136,6 +136,10 @@ SQLite session 生命周期压测在 200 次请求、并发 20 下为 200/200 �
 | `GET /api/sessions/{id}` | 查看当前状态和最近 30 条请求 trace |
 | `DELETE /api/sessions/{id}` | 清除会话 |
 
+TripFlow 使用 `POST /api/trips`、单行程 `GET`、交通/住宿变更、冲突查询与
+`calendar.ics` 导出端点。在尚未引入账号隔离前，公开的全局行程列表被禁用，
+所有 TripFlow 写操作按 IP 限流；行程 ID 是高熵不可枚举标识符。
+
 同一会话通过 async lock 串行执行，不同会话可以并发。SDK 对话历史、业务
 structured state 与最近 30 条 trace 写入同一个 SQLite 文件的隔离表中，服务重启后
 可以恢复；过期会话和对应消息会一并清理。模型/API 故障会返回 503 并回滚本轮
@@ -155,7 +159,7 @@ docker run --rm -p 8000:8000 \
 
 容器以非 root 用户运行，named volume 保存 SQLite 数据。当前限流器是面向单 worker
 部署的进程内保护；横向扩容时应替换为 Redis/API Gateway 限流。GitHub Actions 在
-每次 push/PR 执行 131 项测试、两套 Eval 数据集静态校验、JavaScript/Python
+每次 push/PR 执行 132 项测试、两套 Eval 数据集静态校验、JavaScript/Python
 语法检查和 Docker 构建；
 CI 不读取线上密钥，也不会产生模型费用。
 

@@ -96,6 +96,15 @@ def test_trip_crud_and_arbitrary_operator_http_contract():
     assert api.get(f"/api/trips/{trip_id}").status_code == 200
 
 
+def test_global_trip_listing_is_not_publicly_exposed():
+    api = client()
+    api.post("/api/trips", json={"title": "Private by default"})
+
+    response = api.get("/api/trips")
+
+    assert response.status_code == 405
+
+
 def test_stale_http_write_returns_conflict():
     api = client()
     trip_id = api.post("/api/trips", json={"title": "Europe"}).json()["id"]

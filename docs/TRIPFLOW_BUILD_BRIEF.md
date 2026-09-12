@@ -41,7 +41,7 @@ The core workflow is:
   deterministic evidence grounding.
 - A responsive browser UI for text proposals, confirmed forms, edits, conflict
   warnings, and calendar export.
-- A 90-case real-model extraction Eval plus 131 deterministic project tests.
+- A 90-case real-model extraction Eval plus 132 deterministic project tests.
 - No booking, payment, cancellation, realtime monitoring, or calendar mutation
   in the initial slice.
 

@@ -34,10 +34,6 @@ def build_tripflow_router(
     def create_trip(payload: CreateTripInput) -> Trip:
         return service.create_trip(payload)
 
-    @router.get("", response_model=list[Trip])
-    def list_trips() -> list[Trip]:
-        return service.list_trips()
-
     @router.get("/{trip_id}", response_model=Trip)
     def get_trip(trip_id: str) -> Trip:
         try:
