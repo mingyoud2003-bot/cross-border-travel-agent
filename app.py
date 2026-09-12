@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import time
 from contextlib import asynccontextmanager
@@ -23,6 +24,7 @@ from api_models import (
 from logging_config import configure_logging
 from metrics import MetricsRegistry
 from rate_limit import SlidingWindowRateLimiter
+from flight_provider import AeroDataBoxFlightProvider, FlightProvider
 from settings import (
     api_key_configured,
     load_local_env,
@@ -40,11 +42,15 @@ WEB_DIR = ROOT / "web"
 def create_app(
     service: AgentService | None = None,
     tripflow_service: TripFlowService | None = None,
+    flight_provider: FlightProvider | None = None,
 ) -> FastAPI:
     load_local_env()
     metrics = MetricsRegistry()
     runtime = service or AgentService(metrics=metrics)
     tripflow = tripflow_service or TripFlowService(db_path=session_db_path())
+    flight_data = flight_provider or AeroDataBoxFlightProvider(
+        os.environ.get("AERODATABOX_RAPIDAPI_KEY")
+    )
     limiter = SlidingWindowRateLimiter(rate_limit_per_minute())
     logger = configure_logging()
 
@@ -55,14 +61,17 @@ def create_app(
         if close:
             close()
         tripflow.close()
+        close_flight_provider = getattr(flight_data, "close", None)
+        if close_flight_provider:
+            close_flight_provider()
 
     api = FastAPI(
         title="TripFlow Travel Operations Agent",
-        version="0.7.0",
-        description="A confirmation-gated itinerary workspace with traceable AI extraction.",
+        version="0.8.0",
+        description="A confirmation-gated itinerary workspace with traceable AI extraction and bounded provider verification.",
         lifespan=lifespan,
     )
-    api.include_router(build_tripflow_router(tripflow))
+    api.include_router(build_tripflow_router(tripflow, flight_provider=flight_data))
 
     @api.middleware("http")
     async def request_observability(request: Request, call_next):
@@ -219,6 +228,7 @@ def create_app(
     api.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
     api.state.agent_service = runtime
     api.state.tripflow_service = tripflow
+    api.state.flight_provider = flight_data
     api.state.metrics = metrics
     return api
 

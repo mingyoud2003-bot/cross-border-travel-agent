@@ -12,7 +12,7 @@
 - Offline regrade of that same full output after documented equivalent-value
   corrections: 90/90 (100%)
 
-The dataset covers arbitrary European, Chinese, and Japanese train operators;
+This 90-case baseline covers arbitrary European, Chinese, and Japanese train operators;
 international and domestic flights; stays; multi-item text; missing dates,
 times, cities, and operators; non-itinerary input; quoted examples; and prompt
 injection. The runner checks collection cardinality, exact high-value fields,
@@ -44,11 +44,37 @@ These checks run after the model and before any candidate reaches the
 confirmation form. Model extraction remains useful for heterogeneous language,
 while authority stays in deterministic application code.
 
+## v0.8 flight-provider extension
+
+The dataset now contains 100 cases. Ten new cases target the user-triggered
+flight lookup path, while retaining the original 90-case baseline unchanged.
+
+| Category | Result |
+|---|---:|
+| Provider lookup extraction and missing fields | 6/6 |
+| Provider cost and safety guardrails | 4/4 |
+| Focused real-model regression | 10/10 |
+| Infrastructure errors | 0 |
+
+The new cases require an explicit lookup/check intent, a source-grounded flight
+number, and an explicit ISO date before an external request is authorized. They
+also cover broad route requests, price questions, relative dates, quoted prompt
+examples, prompt injection, and explicit requests not to perform a lookup.
+
+Provider transport is tested separately and deterministically: response mapping,
+ten-minute caching, no-configuration, range limits, quota and malformed-response
+degradation, trip-bound candidate IDs, expiration, one-time consumption, and
+server-owned provenance. A manual live smoke check confirmed the same adapter
+against AeroDataBox; the Eval does not claim live-provider availability as a
+model quality metric.
+
 ## Reproduction
 
 ```bash
 python evals/run_tripflow_eval.py --validate-only
 python evals/run_tripflow_eval.py
+python evals/run_tripflow_eval.py --category provider_lookup
+python evals/run_tripflow_eval.py --category provider_guardrail
 python evals/run_tripflow_eval.py --regrade
 ```
 

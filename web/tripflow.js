@@ -40,7 +40,7 @@ $("create-form").addEventListener("submit", async (event) => {
 });
 
 $("sample").addEventListener("click", () => {
-  $("quick-text").value = "2026年10月26日乘坐 Deutsche Bahn ICE 105，08:45 从 Berlin Hbf 出发，13:12 到 Köln Hbf";
+  $("quick-text").value = "请查询 2026-09-12 的 LH400 航班状态";
 });
 
 $("parse-text").addEventListener("click", async () => {
@@ -56,8 +56,13 @@ $("parse-text").addEventListener("click", async () => {
       ...proposal.transports.map((item) => ({ kind: "transport", item })),
       ...proposal.stays.map((item) => ({ kind: "stay", item })),
     ];
+    renderProviderLookups(proposal.provider_lookups || []);
     if (proposalQueue.length) {
       showNextProposal();
+    } else if ((proposal.provider_lookups || []).length) {
+      showProposalMessages(proposal);
+    } else if ((proposal.flight_lookups || []).some((item) => item.missing_fields.length)) {
+      showProposalMessages(proposal);
     } else {
       toast("没有识别到可用的交通或住宿信息。");
     }
@@ -72,6 +77,72 @@ function showNextProposal() {
   else fillStay(candidate.item);
   showProposalNote(candidate.item.missing_fields);
 }
+
+function showProposalMessages(proposal) {
+  const missing = (proposal.flight_lookups || []).flatMap((item) => item.missing_fields || []);
+  const messages = [
+    ...(proposal.clarification_questions || []),
+    ...(missing.length ? [`航班查询还缺少：${[...new Set(missing)].join("、")}`] : []),
+    ...(proposal.warnings || []),
+  ];
+  $("proposal-note").textContent = messages.join(" ") || "联网结果仅作为候选，请核对后确认。";
+  $("proposal-note").classList.remove("hidden");
+}
+
+function renderProviderLookups(outcomes) {
+  const container = $("provider-results");
+  if (!outcomes.length) {
+    container.innerHTML = "";
+    container.classList.add("hidden");
+    return;
+  }
+  container.innerHTML = outcomes.map((outcome) => {
+    const candidates = (outcome.candidates || []).map(renderFlightCandidate).join("");
+    const cacheNote = outcome.cached ? " · 缓存结果" : "";
+    return `<section class="provider-outcome">
+      <div class="provider-head"><strong>${escapeHtml(outcome.flight_number)} · ${escapeHtml(outcome.departure_date)}</strong><span>${escapeHtml(outcome.status.toUpperCase())}${cacheNote}</span></div>
+      <p>${escapeHtml(outcome.message)}</p>${candidates}
+      <a class="attribution" href="${escapeHtml(outcome.attribution_url)}" target="_blank" rel="noreferrer">Flight data by AeroDataBox</a>
+    </section>`;
+  }).join("");
+  container.classList.remove("hidden");
+}
+
+function renderFlightCandidate(item) {
+  const departure = zonedDisplay(item.departure_at, item.origin.timezone);
+  const arrival = zonedDisplay(item.arrival_at, item.destination.timezone);
+  const details = [
+    item.departure_terminal ? `出发航站楼 ${item.departure_terminal}` : "",
+    item.departure_gate ? `登机口 ${item.departure_gate}` : "",
+    item.arrival_terminal ? `到达航站楼 ${item.arrival_terminal}` : "",
+  ].filter(Boolean).join(" · ");
+  return `<article class="flight-candidate">
+    <div><span class="live-badge">${escapeHtml(item.flight_status)}</span><strong>${escapeHtml(item.operator)} ${escapeHtml(item.flight_number)}</strong></div>
+    <p>${escapeHtml(item.origin.name)} → ${escapeHtml(item.destination.name)}</p>
+    <p>${escapeHtml(departure)} → ${escapeHtml(arrival)}</p>
+    ${details ? `<small>${escapeHtml(details)}</small>` : ""}
+    <button class="primary confirm-provider" type="button" data-candidate-id="${escapeHtml(item.candidate_id)}">确认并加入行程</button>
+  </article>`;
+}
+
+$("provider-results").addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-candidate-id]");
+  if (!button) return;
+  button.disabled = true;
+  try {
+    trip = await api(`/api/trips/${trip.id}/providers/flights/confirm`, {
+      method: "POST",
+      headers: { "If-Match": String(trip.version) },
+      body: JSON.stringify({ candidate_id: button.dataset.candidateId }),
+    });
+    await render();
+    button.closest(".flight-candidate").remove();
+    toast("已保存经 AeroDataBox 查询且由你确认的航班。");
+  } catch (error) {
+    await recoverVersion(error);
+    button.disabled = false;
+  }
+});
 
 function showProposalNote(missingFields) {
   const missing = missingFields.length ? missingFields.join("、") : "无";
@@ -201,7 +272,9 @@ function renderItem(item) {
   if (item.kind === "stay") return `<article class="trip-item"><div class="trip-time">${escapeHtml(item.check_in)}</div><div class="trip-main"><strong>${escapeHtml(item.property_name)}</strong><span>${escapeHtml(item.city)} · ${escapeHtml(item.check_in)} → ${escapeHtml(item.check_out)}</span></div><div class="trip-meta"><span class="badge">USER CONFIRMED · R${item.revision}</span>${actions}</div></article>`;
   const departure = zonedDisplay(item.departure_at, item.origin.timezone);
   const arrival = zonedDisplay(item.arrival_at, item.destination.timezone, false);
-  return `<article class="trip-item"><div class="trip-time">${escapeHtml(departure)}</div><div class="trip-main"><strong>${escapeHtml(item.origin.name)} → ${escapeHtml(item.destination.name)}</strong><span>${escapeHtml(item.operator)} ${escapeHtml(item.service_number || "")} · ${escapeHtml(item.origin.timezone)} → ${escapeHtml(item.destination.timezone)}</span></div><div class="trip-meta">${escapeHtml(arrival)}<br><span class="badge">USER CONFIRMED · R${item.revision}</span>${actions}</div></article>`;
+  const providerVerified = Object.values(item.provenance || {}).some((source) => source.source_type === "provider");
+  const badge = providerVerified ? "PROVIDER CHECKED · USER CONFIRMED" : "USER CONFIRMED";
+  return `<article class="trip-item"><div class="trip-time">${escapeHtml(departure)}</div><div class="trip-main"><strong>${escapeHtml(item.origin.name)} → ${escapeHtml(item.destination.name)}</strong><span>${escapeHtml(item.operator)} ${escapeHtml(item.service_number || "")} · ${escapeHtml(item.origin.timezone)} → ${escapeHtml(item.destination.timezone)}</span></div><div class="trip-meta">${escapeHtml(arrival)}<br><span class="badge">${badge} · R${item.revision}</span>${providerVerified ? '<br><a class="attribution" href="https://aerodatabox.com/" target="_blank" rel="noreferrer">Flight data by AeroDataBox</a>' : ""}${actions}</div></article>`;
 }
 function zonedDisplay(value, timeZone, includeDate = true) {
   try {

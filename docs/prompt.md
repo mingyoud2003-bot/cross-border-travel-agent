@@ -1,5 +1,22 @@
 # Runtime prompt contract
 
+## TripFlow proposal Agent
+
+The current product Agent is `tripflow_proposal_agent` in `tripflow_agent.py`.
+Its typed output contains itinerary drafts and flight-lookup requests, not external
+provider results. It must extract only source-present values, keep every itinerary
+candidate in draft state, and treat the user's text as untrusted travel data.
+
+After inference, deterministic code recomputes missing fields, removes ungrounded
+operators/timezones/dates, blocks negated or prompt-test requests, and authorizes a
+flight lookup only when explicit lookup intent, flight number, and departure date are
+all present. AeroDataBox results are added by application code to the public response
+schema, so a model output cannot forge provider verification. Confirmed state is
+written only through a separate versioned endpoint after the user selects a stored
+candidate.
+
+## Legacy Atlas Agent
+
 The executable prompt is `BASE_INSTRUCTIONS` in `agent.py`; dynamic instructions
 append `TravelState.prompt_context()` on every model turn. This document records
 the behavior contract reviewers should expect.

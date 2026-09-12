@@ -22,6 +22,7 @@ Recommended alerts:
 
 - 5xx ratio above 5% for five minutes;
 - Agent `provider_error` ratio above 10%;
+- flight-provider `quota_exceeded` or `unavailable` outcomes above 10%;
 - p95 Agent latency above 30 seconds;
 - sustained 429 responses;
 - readiness failing for two checks;
@@ -35,9 +36,16 @@ deployment.
 1. Use `request_id` to correlate the HTTP log with the persisted public trace.
 2. Separate product-contract failures from upstream/network failures.
 3. Confirm `/ready`, filesystem capacity, SQLite write access, and provider status.
+   For flight-only failures, distinguish missing configuration, the ±365-day scope,
+   quota/rate limiting, no result, upstream outage, and payload-contract drift.
 4. For a product regression, add the observed input to `evals/agent_cases.json`, fix
    the smallest control boundary, run focused Eval, then run the full suite.
 5. Restore service only after deterministic tests and the affected Eval category pass.
+
+For an AeroDataBox incident, keep manual itinerary entry available and surface the
+structured provider outcome. Do not loosen the grounding gate or ask the model to
+reconstruct flight status. A retry should reuse the ten-minute cache when available;
+candidate confirmation remains possible for 15 minutes after lookup.
 
 ## Data and backup
 

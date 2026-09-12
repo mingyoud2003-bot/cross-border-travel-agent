@@ -27,14 +27,14 @@ def test_dataset_has_target_case_count_and_unique_ids():
     assert len({case["id"] for case in cases}) == len(cases)
 
 
-def test_tripflow_dataset_has_90_cases_and_meaningful_coverage():
+def test_tripflow_dataset_has_100_cases_and_meaningful_coverage():
     cases = tripflow_eval.load_cases()
     categories = {case["category"] for case in cases}
 
-    assert len(cases) == 90
+    assert len(cases) == 100
     assert {
         "train", "flight", "stay", "missing", "multi_item", "negative",
-        "adversarial",
+        "adversarial", "provider_lookup", "provider_guardrail",
     } <= categories
 
 

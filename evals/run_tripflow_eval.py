@@ -35,7 +35,7 @@ def load_cases() -> list[dict[str, Any]]:
         if case["id"] in seen:
             raise ValueError(f"duplicate case id: {case['id']}")
         seen.add(case["id"])
-        if set(case["counts"]) != {"transports", "stays"}:
+        if not {"transports", "stays"}.issubset(case["counts"]):
             raise ValueError(f"{case['id']}: counts must cover transports and stays")
     return cases
 

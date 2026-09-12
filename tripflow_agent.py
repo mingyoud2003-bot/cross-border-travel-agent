@@ -7,6 +7,8 @@ from typing import Literal, Protocol
 from agents import Agent, Runner
 from pydantic import BaseModel, Field
 
+from flight_provider import FlightLookupOutcome, normalize_flight_number
+
 
 class LocationCandidate(BaseModel):
     name: str | None = None
@@ -38,12 +40,24 @@ class StayCandidate(BaseModel):
     source_excerpt: str = ""
 
 
-class ItineraryProposal(BaseModel):
+class FlightLookupRequest(BaseModel):
+    flight_number: str | None = None
+    departure_date: date | None = None
+    missing_fields: list[str] = Field(default_factory=list)
+    source_excerpt: str = ""
+
+
+class AgentItineraryProposal(BaseModel):
     transports: list[TransportCandidate] = Field(default_factory=list)
     stays: list[StayCandidate] = Field(default_factory=list)
+    flight_lookups: list[FlightLookupRequest] = Field(default_factory=list)
     clarification_questions: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     requires_confirmation: Literal[True] = True
+
+
+class ItineraryProposal(AgentItineraryProposal):
+    provider_lookups: list[FlightLookupOutcome] = Field(default_factory=list)
 
 
 PROPOSAL_INSTRUCTIONS = """
@@ -62,9 +76,14 @@ Reliability contract:
 - Ask concise clarification questions only for facts that materially affect the
   itinerary timeline.
 - Support arbitrary train and airline operators; do not apply an allowlist.
-- Do not extract hypothetical examples, search/recommendation requests, prompt
-  tests, or journeys the user explicitly says were not booked or should not be
-  added.
+- For an explicit request to check, verify, or look up a specific flight, create
+  a flight_lookups item only when the user supplied a flight number. Extract an
+  exact departure date when present and list missing fields otherwise. Do not
+  invent either value. Application code owns provider calls and results.
+- Do not extract hypothetical examples, broad route/price recommendation
+  requests, prompt tests, or journeys the user explicitly says were not booked
+  or should not be added. A specific flight-status lookup is allowed even when
+  it is not yet a confirmed booking.
 """
 
 
@@ -73,7 +92,7 @@ tripflow_proposal_agent = Agent(
     model="gpt-5.6-luna",
     model_settings={"reasoning": {"effort": "none"}, "verbosity": "low"},
     instructions=PROPOSAL_INSTRUCTIONS,
-    output_type=ItineraryProposal,
+    output_type=AgentItineraryProposal,
 )
 
 
@@ -94,21 +113,22 @@ class AgentsProposalService:
                 "itinerary extraction is temporarily unavailable"
             ) from exc
         output = result.final_output
-        if not isinstance(output, ItineraryProposal):
+        if not isinstance(output, AgentItineraryProposal):
             raise RuntimeError("proposal agent returned an invalid output type")
         return normalize_proposal(text, output)
 
 
-def normalize_proposal(text: str, proposal: ItineraryProposal) -> ItineraryProposal:
+def normalize_proposal(
+    text: str, proposal: AgentItineraryProposal
+) -> ItineraryProposal:
     """Recompute contractual missing fields instead of trusting model labels."""
 
-    normalized = proposal.model_copy(deep=True)
+    normalized = ItineraryProposal.model_validate(proposal.model_dump())
     if _explicitly_not_an_itinerary(text):
         normalized.transports = []
         normalized.stays = []
         normalized.clarification_questions = []
         normalized.warnings.append("原文明确表示这不是要加入的已预订行程。")
-        return normalized
     for item in normalized.transports:
         item.status = "draft"
         item.operator = _grounded_operator(text, item.operator, item.service_number)
@@ -148,6 +168,28 @@ def normalize_proposal(text: str, proposal: ItineraryProposal) -> ItineraryPropo
             field_name for field_name, value in required.items() if not value
         )
         _validate_excerpt(text, item.source_excerpt, normalized.warnings)
+
+    if not _flight_lookup_requested(text) or _explicitly_not_a_lookup(text):
+        normalized.flight_lookups = []
+    else:
+        grounded_lookups: list[FlightLookupRequest] = []
+        for lookup in normalized.flight_lookups[:3]:
+            lookup.flight_number = _grounded_flight_number(
+                text, lookup.flight_number
+            )
+            lookup.departure_date = _grounded_date(text, lookup.departure_date)
+            lookup.missing_fields = [
+                field_name
+                for field_name, value in (
+                    ("flight_number", lookup.flight_number),
+                    ("departure_date", lookup.departure_date),
+                )
+                if value is None
+            ]
+            _validate_excerpt(text, lookup.source_excerpt, normalized.warnings)
+            if lookup.flight_number:
+                grounded_lookups.append(lookup)
+        normalized.flight_lookups = grounded_lookups
 
     normalized.warnings = list(dict.fromkeys(normalized.warnings))
     return normalized
@@ -220,3 +262,65 @@ def _explicitly_not_an_itinerary(text: str) -> bool:
         "不要添加",
     )
     return any(phrase in normalized for phrase in phrases)
+
+
+def _flight_lookup_requested(text: str) -> bool:
+    normalized = " ".join(text.casefold().split())
+    phrases = (
+        "查航班",
+        "查询航班",
+        "查一下",
+        "查下",
+        "核验",
+        "验证",
+        "航班状态",
+        "航班信息",
+        "check flight",
+        "check the flight",
+        "verify flight",
+        "verify the flight",
+        "flight status",
+        "look up flight",
+        "lookup flight",
+    )
+    return any(phrase in normalized for phrase in phrases)
+
+
+def _explicitly_not_a_lookup(text: str) -> bool:
+    normalized = " ".join(text.casefold().split())
+    phrases = (
+        "only a prompt test",
+        "this is a prompt test",
+        "security test text",
+        "hypothetical example",
+        "fictional example",
+        "只是提示词测试",
+        "只是测试文本",
+        "安全测试文本",
+        "假设示例",
+    )
+    return any(phrase in normalized for phrase in phrases)
+
+
+def _grounded_flight_number(text: str, value: str | None) -> str | None:
+    if not value:
+        return None
+    try:
+        normalized = normalize_flight_number(value)
+    except ValueError:
+        return None
+    compact_text = re.sub(r"[\s-]+", "", text).upper()
+    return normalized if normalized in compact_text else None
+
+
+def _grounded_date(text: str, value: date | None) -> date | None:
+    if value is None:
+        return None
+    year, month, day = value.year, value.month, value.day
+    patterns = (
+        rf"{year}-0?{month}-0?{day}(?!\d)",
+        rf"{year}/0?{month}/0?{day}(?!\d)",
+        rf"{year}\.0?{month}\.0?{day}(?!\d)",
+        rf"{year}\s*年\s*0?{month}\s*月\s*0?{day}\s*日?",
+    )
+    return value if any(re.search(pattern, text) for pattern in patterns) else None

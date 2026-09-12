@@ -16,6 +16,8 @@ services:
     envVars:
       - key: OPENAI_API_KEY
         sync: false
+      - key: AERODATABOX_RAPIDAPI_KEY
+        sync: false
       - key: SESSION_DB_PATH
         value: /data/travel-agent.db
       - key: RATE_LIMIT_PER_MINUTE

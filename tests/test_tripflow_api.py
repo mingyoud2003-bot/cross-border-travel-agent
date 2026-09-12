@@ -1,7 +1,15 @@
+from datetime import UTC, date, datetime
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from flight_provider import (
+    FlightLookupOutcome,
+    ProviderCandidateError,
+    ProviderFlightCandidate,
+)
 from tripflow_agent import (
+    FlightLookupRequest,
     ItineraryProposal,
     LocationCandidate,
     TransportCandidate,
@@ -9,6 +17,7 @@ from tripflow_agent import (
     ProposalUnavailableError,
 )
 from tripflow_api import build_tripflow_router
+from tripflow_models import Location, SourceInput, TransportInput
 from tripflow_service import TripFlowService
 
 
@@ -37,6 +46,76 @@ class UnavailableProposalService:
         raise ProposalUnavailableError("itinerary extraction is temporarily unavailable")
 
 
+class FlightLookupProposalService:
+    async def propose(self, text: str) -> ItineraryProposal:
+        return ItineraryProposal(
+            flight_lookups=[
+                FlightLookupRequest(
+                    flight_number="LH400",
+                    departure_date=date(2026, 10, 26),
+                    source_excerpt=text,
+                )
+            ]
+        )
+
+
+class FakeFlightProvider:
+    candidate_id = "pfc_" + "f" * 32
+
+    def lookup(self, flight_number, departure_date, *, trip_id):
+        return FlightLookupOutcome(
+            flight_number=flight_number,
+            departure_date=departure_date,
+            status="found",
+            message="found",
+            candidates=[
+                ProviderFlightCandidate(
+                    candidate_id=self.candidate_id,
+                    flight_number="LH 400",
+                    operator="Lufthansa",
+                    flight_status="Expected",
+                    origin=Location(
+                        name="Frankfurt (FRA)", city="Frankfurt", timezone="Europe/Berlin"
+                    ),
+                    destination=Location(
+                        name="John F Kennedy (JFK)", city="New York", timezone="America/New_York"
+                    ),
+                    departure_at="2026-10-26T10:00:00+01:00",
+                    arrival_at="2026-10-26T13:30:00-04:00",
+                    checked_at=datetime(2026, 10, 25, tzinfo=UTC),
+                )
+            ],
+        )
+
+    def confirmed_input(self, candidate_id, *, trip_id):
+        if candidate_id != self.candidate_id:
+            raise ProviderCandidateError(candidate_id)
+        return TransportInput(
+            mode="flight",
+            operator="Lufthansa",
+            service_number="LH 400",
+            origin=Location(
+                name="Frankfurt (FRA)", city="Frankfurt", timezone="Europe/Berlin"
+            ),
+            destination=Location(
+                name="John F Kennedy (JFK)", city="New York", timezone="America/New_York"
+            ),
+            departure_at="2026-10-26T10:00:00+01:00",
+            arrival_at="2026-10-26T13:30:00-04:00",
+            source=SourceInput(
+                source_type="provider",
+                source_id=candidate_id,
+                source_excerpt="AeroDataBox LH400",
+                confirmed_by_user=True,
+            ),
+        )
+
+
+class CrashingFlightProvider(FakeFlightProvider):
+    def lookup(self, flight_number, departure_date, *, trip_id):
+        raise RuntimeError("unexpected provider failure")
+
+
 def client() -> TestClient:
     app = FastAPI()
     app.include_router(
@@ -49,6 +128,26 @@ def unavailable_client() -> TestClient:
     app = FastAPI()
     app.include_router(
         build_tripflow_router(TripFlowService(), UnavailableProposalService())
+    )
+    return TestClient(app)
+
+
+def flight_lookup_client() -> TestClient:
+    app = FastAPI()
+    app.include_router(
+        build_tripflow_router(
+            TripFlowService(), FlightLookupProposalService(), FakeFlightProvider()
+        )
+    )
+    return TestClient(app)
+
+
+def crashing_flight_lookup_client() -> TestClient:
+    app = FastAPI()
+    app.include_router(
+        build_tripflow_router(
+            TripFlowService(), FlightLookupProposalService(), CrashingFlightProvider()
+        )
     )
     return TestClient(app)
 
@@ -155,6 +254,90 @@ def test_proposal_provider_failure_is_a_retryable_503():
     assert response.json()["detail"] == "itinerary extraction is temporarily unavailable"
 
 
+def test_agent_lookup_returns_provider_candidate_without_mutating_trip():
+    api = flight_lookup_client()
+    trip = api.post("/api/trips", json={"title": "Flight check"}).json()
+
+    response = api.post(
+        f"/api/trips/{trip['id']}/proposals/text",
+        json={"text": "请查询 2026-10-26 的 LH400 航班状态"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider_lookups"][0]["status"] == "found"
+    assert body["provider_lookups"][0]["candidates"][0]["operator"] == "Lufthansa"
+    assert api.get(f"/api/trips/{trip['id']}").json()["reservations"] == []
+
+
+def test_unexpected_provider_failure_degrades_without_losing_agent_proposal():
+    api = crashing_flight_lookup_client()
+    trip = api.post("/api/trips", json={"title": "Provider failure"}).json()
+
+    response = api.post(
+        f"/api/trips/{trip['id']}/proposals/text",
+        json={"text": "请查询 2026-10-26 的 LH400 航班状态"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["flight_lookups"][0]["flight_number"] == "LH400"
+    assert body["provider_lookups"][0]["status"] == "unavailable"
+    assert "未经核验" in body["provider_lookups"][0]["message"]
+
+
+def test_provider_candidate_requires_confirmation_and_gets_trusted_provenance():
+    api = flight_lookup_client()
+    trip = api.post("/api/trips", json={"title": "Flight check"}).json()
+    lookup = api.post(
+        f"/api/trips/{trip['id']}/proposals/text",
+        json={"text": "请查询 2026-10-26 的 LH400 航班状态"},
+    ).json()
+    candidate_id = lookup["provider_lookups"][0]["candidates"][0]["candidate_id"]
+
+    confirmed = api.post(
+        f"/api/trips/{trip['id']}/providers/flights/confirm",
+        headers={"If-Match": "1"},
+        json={"candidate_id": candidate_id},
+    )
+
+    assert confirmed.status_code == 200
+    reservation = confirmed.json()["reservations"][0]
+    assert reservation["service_number"] == "LH 400"
+    assert reservation["provenance"]["departure_at"]["source_type"] == "provider"
+    assert reservation["provenance"]["departure_at"]["confirmed_by_user"] is True
+
+
+def test_client_cannot_spoof_provider_provenance_on_normal_transport_endpoint():
+    api = client()
+    trip = api.post("/api/trips", json={"title": "No spoof"}).json()
+    payload = train_payload()
+    payload["source"]["source_type"] = "provider"
+
+    response = api.post(
+        f"/api/trips/{trip['id']}/transport",
+        headers={"If-Match": "1"},
+        json=payload,
+    )
+
+    assert response.status_code == 422
+    assert "Provider" in response.json()["detail"]
+
+
+def test_expired_provider_candidate_requires_a_fresh_lookup():
+    api = flight_lookup_client()
+    trip = api.post("/api/trips", json={"title": "Expired"}).json()
+
+    response = api.post(
+        f"/api/trips/{trip['id']}/providers/flights/confirm",
+        headers={"If-Match": "1"},
+        json={"candidate_id": "pfc_" + "0" * 32},
+    )
+
+    assert response.status_code == 410
+    assert "重新查询" in response.json()["detail"]
+
+
 def test_ics_endpoint_returns_calendar_content_type():
     api = client()
     trip_id = api.post("/api/trips", json={"title": "Calendar"}).json()["id"]
@@ -248,6 +431,28 @@ def test_proposal_normalizer_rejects_explicitly_unbooked_journey():
     assert normalized.stays == []
     assert normalized.clarification_questions == []
     assert "不是要加入" in normalized.warnings[-1]
+
+
+def test_flight_lookup_normalizer_requires_grounded_number_date_and_intent():
+    proposal = ItineraryProposal(
+        flight_lookups=[
+            FlightLookupRequest(
+                flight_number="LH400",
+                departure_date=date(2026, 10, 26),
+                source_excerpt="查一下 2026年10月26日 LH400",
+            )
+        ]
+    )
+
+    grounded = normalize_proposal("查一下 2026年10月26日 LH400", proposal)
+    no_intent = normalize_proposal("2026年10月26日 LH400", proposal)
+    hallucinated = normalize_proposal("查一下 2026年10月26日 LH401", proposal)
+
+    assert grounded.flight_lookups[0].flight_number == "LH400"
+    assert grounded.flight_lookups[0].departure_date == date(2026, 10, 26)
+    assert grounded.flight_lookups[0].missing_fields == []
+    assert no_intent.flight_lookups == []
+    assert hallucinated.flight_lookups == []
 
 
 def test_update_and_delete_reservation_http_contract():

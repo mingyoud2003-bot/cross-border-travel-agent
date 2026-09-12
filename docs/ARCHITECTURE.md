@@ -1,6 +1,36 @@
 # Architecture and design decisions
 
-## System boundary
+## TripFlow v0.8 system boundary
+
+TripFlow separates language understanding, external data, and state mutation:
+
+```text
+User text
+   |
+typed Agent proposal (no write tools, no provider result fields)
+   |
+deterministic evidence and intent gate
+   |                         \
+manual draft candidates      AeroDataBox lookup
+                              |
+                    server-side expiring candidate
+                              |
+                     explicit user confirmation
+                              |
+versioned itinerary + field provenance -> conflicts -> stable ICS
+```
+
+The model may propose facts but cannot call AeroDataBox directly or manufacture a
+provider result. Application code authorizes only a specific-flight lookup with an
+explicit, source-grounded number and date. Provider candidates are high-entropy,
+trip-bound, expire after 15 minutes, and are consumed once. Normal create/update
+endpoints reject client-declared `provider` provenance.
+
+This creates three useful failure domains: model extraction can fail without
+mutating state, provider lookup can fail without model guessing, and a stale UI can
+hit an `If-Match` conflict without overwriting a newer itinerary.
+
+## Legacy Atlas system boundary
 
 Atlas is a decision-support product, not a booking system. One code-first Agent
 classifies the current task and can call three domain tools plus one deterministic
@@ -25,6 +55,17 @@ Transitous | calculator | grounded loyalty retrieval | decision composer
 ```
 
 ## Reliability invariants
+
+For TripFlow, the current invariants are:
+
+1. Text parsing and flight lookup never modify the confirmed itinerary.
+2. External lookup requires explicit intent plus a grounded flight number and date.
+3. Only a server-created, trip-bound candidate may claim provider provenance.
+4. Provider failure, quota exhaustion, no result, and date-range rejection are
+   structured outcomes, never invitations for the model to fill a gap.
+5. Every write requires the caller's current itinerary version.
+
+The retained Atlas control plane adds these legacy decision-workflow invariants:
 
 1. A tool argument must equal a value explicitly captured from a user turn.
 2. Missing or invalid values cannot enable an execution tool.

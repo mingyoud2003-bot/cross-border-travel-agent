@@ -7,16 +7,19 @@ The repository includes two Render Blueprints:
 - `render.paid.yaml` is the production-shaped reference. It uses a paid web service
   and a 1 GB persistent disk for SQLite state.
 
-Both variants deploy one Docker service in Singapore, check `/ready`, inject the
-OpenAI key as an unsynced secret, and deploy updates only after GitHub checks pass.
+Both variants deploy one Docker service in Singapore, check `/ready`, inject API
+keys as unsynced secrets, and deploy updates only after GitHub checks pass.
 
 ## Free portfolio deployment
 
 1. Connect `mingyoud2003-bot/cross-border-travel-agent` to your Render account.
 2. In the Render Dashboard, choose **New > Blueprint** and select the repository.
 3. Keep the Blueprint path at the root default, `render.yaml`.
-4. Enter `OPENAI_API_KEY` when Render prompts for the unsynced secret. Never commit
-   the value to Git or place it directly in a Blueprint.
+4. Enter `OPENAI_API_KEY` and, for live flight checks,
+   `AERODATABOX_RAPIDAPI_KEY` when Render prompts for unsynced secrets. Never
+   commit either value to Git or place it directly in a Blueprint. Without the
+   AeroDataBox key, itinerary parsing and manual entry continue to work and flight
+   lookup returns a visible `not_configured` outcome.
 5. Review the configuration and apply the Blueprint.
 
 Render's free web service can spin down after an idle period and uses an ephemeral
@@ -35,9 +38,12 @@ curl --fail "$SERVICE_URL/ready"
 curl --fail "$SERVICE_URL/metrics"
 ```
 
-Then open `SERVICE_URL` in a browser, create a session, and run the example request
-from the README. A successful deployment should return an eight-section decision
-and expose no message content or API key in logs or metrics.
+Then open `SERVICE_URL` in a browser, create a TripFlow trip, and try
+`请查询 2026-09-12 的 LH400 航班状态` (replace the date with a suitable date in the
+provider's supported range). A successful lookup should return a candidate without
+modifying the timeline; only clicking confirm should add it with provider provenance.
+The legacy demo should still return its eight-section decision. Neither path should
+expose message content or API keys in logs or metrics.
 
 ## Paid persistent deployment
 
@@ -55,6 +61,8 @@ a shared database and distributed rate limiter is required before horizontal sca
 - Use a dedicated OpenAI project and configure conservative project-level spend and
   rate limits before exposing the URL publicly.
 - Keep staging and production keys separate.
+- Configure provider usage alerts and keep the application-side lookup gate/cache;
+  a free upstream plan is not a production capacity guarantee.
 - Treat `/metrics` and session trace endpoints as portfolio-demo interfaces. Add
   authentication or network restrictions before serving real user data.
 - For the paid variant, back up or export session data before replacing its disk.

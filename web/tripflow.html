@@ -16,7 +16,17 @@
     <section class="hero">
       <p class="eyebrow">TRAVEL OPERATIONS AGENT</p>
       <h1>把零散订单，变成可核验的行程。</h1>
-      <p class="lede">用一段话或表单添加航班、火车与住宿，确认每个时区后检查衔接冲突，再导出日历。</p>
+      <p class="lede">用一段话添加航班、火车与住宿；支持按航班号和日期联网核验，确认后检查衔接冲突，再导出日历。</p>
+    </section>
+
+    <section class="capability-card" aria-label="当前联网能力">
+      <div><p class="eyebrow">LIVE DATA · BETA</p><strong>当前联网能力与边界</strong></div>
+      <ul>
+        <li><b>航班</b>：AeroDataBox 覆盖范围内，按航班号与明确出发日期查询；不提供票价、余票或购票。</li>
+        <li><b>铁路</b>：当前支持任意运营商的用户确认信息；跨运营商联网查询尚未开放。</li>
+        <li><b>住宿</b>：当前整理用户提供的订单；不查询房价与库存。</li>
+      </ul>
+      <p>联网结果仍须用户确认。查不到或数据源异常时会明确降级，不会生成虚构行程。</p>
     </section>
 
     <section id="create-view" class="card create-card">
@@ -37,9 +47,10 @@
           <div><p class="eyebrow">QUICK ADD</p><h2>一句话填充</h2></div>
           <button id="sample" class="ghost" type="button">填入示例</button>
         </div>
-        <textarea id="quick-text" rows="5" placeholder="2026年10月26日乘坐 Deutsche Bahn ICE 105，08:45 从 Berlin Hbf 出发，13:12 到 Köln Hbf"></textarea>
-        <button id="parse-text" class="secondary" type="button">Agent 解析为待确认字段</button>
+        <textarea id="quick-text" rows="5" placeholder="例如：请查询 2026-09-12 的 LH400 航班状态"></textarea>
+        <button id="parse-text" class="secondary" type="button">Agent 解析 / 联网核验</button>
         <p id="proposal-note" class="notice hidden"></p>
+        <div id="provider-results" class="provider-results hidden" aria-live="polite"></div>
 
         <div class="divider"></div>
         <p class="eyebrow">CONFIRMED FORM</p>
