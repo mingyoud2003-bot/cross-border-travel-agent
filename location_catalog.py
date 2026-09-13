@@ -46,6 +46,12 @@ _CITIES = (
         "America/Los_Angeles",
         ("Los Angeles", "L.A.", "洛杉矶"),
     ),
+    CanonicalCity(
+        "USSFO",
+        "旧金山",
+        "America/Los_Angeles",
+        ("San Francisco", "San Francisco Bay Area", "旧金山", "三藩市"),
+    ),
 )
 
 

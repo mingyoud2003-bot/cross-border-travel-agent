@@ -45,6 +45,7 @@ def test_location_canonicalizes_chinese_and_english_city_to_same_identity():
         ("Shenzhen", "深圳", "Asia/Shanghai", "CNSZX"),
         ("Hong Kong", "香港", "Asia/Hong_Kong", "HKHKG"),
         ("Los Angeles", "洛杉矶", "America/Los_Angeles", "USLAX"),
+        ("San Francisco", "旧金山", "America/Los_Angeles", "USSFO"),
     ],
 )
 def test_new_bilingual_city_aliases_resolve_to_correct_timezone(
@@ -116,3 +117,22 @@ def test_transport_rejects_non_chronological_times():
             departure_at="2026-10-26T10:00:00+00:00",
             arrival_at="2026-10-26T09:00:00+01:00",
         )
+
+
+def test_san_francisco_to_hong_kong_requires_valid_local_arrival_date():
+    details = {
+        "mode": "flight",
+        "operator": "United Airlines",
+        "service_number": "UA877",
+        "origin": location(
+            "San Francisco International", "旧金山", "America/Los_Angeles"
+        ),
+        "destination": location("香港国际T1", "香港", "Asia/Hong_Kong"),
+        "departure_at": "2026-09-27T23:30",
+    }
+
+    with pytest.raises(ValidationError, match="arrival_at must be later"):
+        TransportInput(**details, arrival_at="2026-09-28T05:00")
+
+    valid = TransportInput(**details, arrival_at="2026-09-29T05:00")
+    assert valid.arrival_at > valid.departure_at

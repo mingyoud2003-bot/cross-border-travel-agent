@@ -94,6 +94,30 @@ def test_imported_hong_kong_to_los_angeles_flight_gets_distinct_catalog_timezone
     assert confirmed.arrival_at > confirmed.departure_at
 
 
+def test_imported_san_francisco_flight_forces_impossible_arrival_date_correction():
+    extraction = DocumentExtraction(
+        transports=[
+            TransportCandidate(
+                mode="flight",
+                operator="United Airlines",
+                service_number="UA877",
+                origin=LocationCandidate(name="旧金山国际", city="旧金山"),
+                destination=LocationCandidate(name="香港国际T1", city="香港"),
+                departure_at="2026-09-27T23:30:00",
+                arrival_at="2026-09-28T05:00:00",
+            )
+        ]
+    )
+
+    flight = normalize_document_extraction(extraction).transports[0]
+
+    assert flight.origin.city == "旧金山"
+    assert flight.origin.timezone == "America/Los_Angeles"
+    assert flight.destination.timezone == "Asia/Hong_Kong"
+    assert flight.arrival_at is None
+    assert flight.missing_fields == ["arrival_at"]
+
+
 def test_one_document_can_produce_multiple_review_candidates_with_page_provenance():
     document = SourceDocument(
         filename="all-bookings.pdf",

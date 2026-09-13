@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime
 from hashlib import sha256
 from pathlib import Path
 from typing import Literal, Protocol
+from zoneinfo import ZoneInfo
 
 from agents import Agent, RunConfig, Runner
 from pydantic import BaseModel, Field, model_validator
@@ -237,6 +238,10 @@ def normalize_document_extraction(value: DocumentExtraction) -> DocumentExtracti
             "departure_at": item.departure_at,
             "arrival_at": item.arrival_at,
         }
+        if _invalid_transport_chronology(item):
+            # Keep the source excerpt but force the user to correct the parsed date.
+            item.arrival_at = None
+            required["arrival_at"] = None
         item.missing_fields = sorted(key for key, field in required.items() if not field)
     for item in normalized.stays:
         item.status = "draft"
@@ -525,6 +530,26 @@ def _complete_datetime(value: str | None) -> str | None:
     except ValueError:
         return None
     return value
+
+
+def _invalid_transport_chronology(item: TransportCandidate) -> bool:
+    if not (
+        item.departure_at
+        and item.arrival_at
+        and item.origin.timezone
+        and item.destination.timezone
+    ):
+        return False
+    try:
+        departure = datetime.fromisoformat(item.departure_at.replace("Z", "+00:00"))
+        arrival = datetime.fromisoformat(item.arrival_at.replace("Z", "+00:00"))
+        if departure.tzinfo is None:
+            departure = departure.replace(tzinfo=ZoneInfo(item.origin.timezone))
+        if arrival.tzinfo is None:
+            arrival = arrival.replace(tzinfo=ZoneInfo(item.destination.timezone))
+        return arrival <= departure
+    except (ValueError, TypeError):
+        return False
 
 
 def _complete_date(value: str | None) -> str | None:

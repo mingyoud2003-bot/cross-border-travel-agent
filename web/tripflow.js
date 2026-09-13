@@ -14,7 +14,7 @@ const CITY_TIMEZONES = {
   madrid:"Europe/Madrid", 马德里:"Europe/Madrid", barcelona:"Europe/Madrid", 巴塞罗那:"Europe/Madrid", amsterdam:"Europe/Amsterdam", 阿姆斯特丹:"Europe/Amsterdam", brussels:"Europe/Brussels", 布鲁塞尔:"Europe/Brussels", monaco:"Europe/Monaco", 摩纳哥:"Europe/Monaco",
   beijing:"Asia/Shanghai", 北京:"Asia/Shanghai", shanghai:"Asia/Shanghai", 上海:"Asia/Shanghai", wuhan:"Asia/Shanghai", 武汉:"Asia/Shanghai",
   zhumadian:"Asia/Shanghai", 驻马店:"Asia/Shanghai", jinan:"Asia/Shanghai", 济南:"Asia/Shanghai", shenzhen:"Asia/Shanghai", 深圳:"Asia/Shanghai",
-  "hong kong":"Asia/Hong_Kong", hongkong:"Asia/Hong_Kong", 香港:"Asia/Hong_Kong", "los angeles":"America/Los_Angeles", 洛杉矶:"America/Los_Angeles",
+  "hong kong":"Asia/Hong_Kong", hongkong:"Asia/Hong_Kong", 香港:"Asia/Hong_Kong", "los angeles":"America/Los_Angeles", 洛杉矶:"America/Los_Angeles", "san francisco":"America/Los_Angeles", 旧金山:"America/Los_Angeles", 三藩市:"America/Los_Angeles",
   tokyo:"Asia/Tokyo", 东京:"Asia/Tokyo", osaka:"Asia/Tokyo", 大阪:"Asia/Tokyo", singapore:"Asia/Singapore", 新加坡:"Asia/Singapore",
   "new york":"America/New_York", 纽约:"America/New_York",
 };
@@ -25,9 +25,19 @@ async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers:{...(formData ? {} : {"Content-Type":"application/json"}), ...(options.headers || {})} });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(typeof body.detail === "string" ? body.detail : `请求失败：${response.status}`);
+    throw new Error(apiErrorMessage(body.detail,response.status));
   }
   return response.status === 204 ? null : response.json();
+}
+
+function apiErrorMessage(detail,status) {
+  if (typeof detail === "string") return detail;
+  const messages=Array.isArray(detail) ? detail.map((item)=>item?.msg || "").filter(Boolean) : [];
+  if (messages.some((message)=>message.includes("arrival_at must be later than departure_at"))) {
+    return "到达时间按所选时区早于出发时间。请核对到达日期和时区；跨越国际日期变更线时，到达日期通常会晚一天。";
+  }
+  if (messages.length) return messages.join("；").replace(/^Value error,\s*/i,"");
+  return `请求失败：${status}`;
 }
 
 function toast(message) {
