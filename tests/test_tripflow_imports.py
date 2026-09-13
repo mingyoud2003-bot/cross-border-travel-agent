@@ -12,6 +12,7 @@ from tripflow_imports import (
     normalize_document_extraction,
     stay_input_from_candidate,
     safe_filename,
+    transport_input_from_candidate,
     validate_upload,
 )
 
@@ -59,6 +60,38 @@ def test_document_normalizer_canonicalizes_known_cities_and_recomputes_missing_f
     assert train.destination.city == "科隆"
     assert train.missing_fields == []
     assert result.stays[0].missing_fields == ["check_out"]
+
+
+def test_imported_hong_kong_to_los_angeles_flight_gets_distinct_catalog_timezones():
+    extraction = DocumentExtraction(
+        transports=[
+            TransportCandidate(
+                mode="flight",
+                operator="United Airlines",
+                service_number="UA153",
+                origin=LocationCandidate(name="香港国际T1", city="香港"),
+                destination=LocationCandidate(name="洛杉矶国际T7", city="洛杉矶"),
+                departure_at="2026-09-18T12:40:00",
+                arrival_at="2026-09-18T11:10:00",
+            )
+        ]
+    )
+    document = SourceDocument(
+        filename="flight.jpeg",
+        mime_type="image/jpeg",
+        sha256="b" * 64,
+        size_bytes=1200,
+        status="parsed",
+    )
+
+    normalized = normalize_document_extraction(extraction)
+    candidate = candidates_from_extraction(normalized, document)[0]
+    confirmed = transport_input_from_candidate(candidate, document.mime_type)
+
+    assert candidate.missing_fields == []
+    assert confirmed.origin.timezone == "Asia/Hong_Kong"
+    assert confirmed.destination.timezone == "America/Los_Angeles"
+    assert confirmed.arrival_at > confirmed.departure_at
 
 
 def test_one_document_can_produce_multiple_review_candidates_with_page_provenance():

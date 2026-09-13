@@ -31,10 +31,21 @@ _CITIES = (
     CanonicalCity("CNSHA", "上海", "Asia/Shanghai", ("Shanghai", "上海")),
     CanonicalCity("CNWUH", "武汉", "Asia/Shanghai", ("Wuhan", "武汉")),
     CanonicalCity("CNZMD", "驻马店", "Asia/Shanghai", ("Zhumadian", "驻马店")),
+    CanonicalCity("CNTNA", "济南", "Asia/Shanghai", ("Jinan", "Tsinan", "济南")),
+    CanonicalCity("CNSZX", "深圳", "Asia/Shanghai", ("Shenzhen", "深圳")),
+    CanonicalCity(
+        "HKHKG", "香港", "Asia/Hong_Kong", ("Hong Kong", "Hongkong", "香港")
+    ),
     CanonicalCity("JPTYO", "东京", "Asia/Tokyo", ("Tokyo", "东京")),
     CanonicalCity("JPOSA", "大阪", "Asia/Tokyo", ("Osaka", "大阪")),
     CanonicalCity("SGSIN", "新加坡", "Asia/Singapore", ("Singapore", "新加坡")),
     CanonicalCity("USNYC", "纽约", "America/New_York", ("New York", "New York City", "NYC", "纽约")),
+    CanonicalCity(
+        "USLAX",
+        "洛杉矶",
+        "America/Los_Angeles",
+        ("Los Angeles", "L.A.", "洛杉矶"),
+    ),
 )
 
 

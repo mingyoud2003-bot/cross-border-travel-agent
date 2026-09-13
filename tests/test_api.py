@@ -102,6 +102,9 @@ def test_web_ui_and_static_assets_are_served():
     assert "review-pending" in tripflow_script.text
     assert "/conversation" in tripflow_script.text
     assert "/imports" in tripflow_script.text
+    assert "请选择时区" in tripflow_script.text
+    assert '香港:"Asia/Hong_Kong"' in tripflow_script.text
+    assert '洛杉矶:"America/Los_Angeles"' in tripflow_script.text
     assert "escapeHtml" in tripflow_script.text
 
     legacy_page = api.get("/legacy")

@@ -1,6 +1,6 @@
 # Architecture and design decisions
 
-## TripFlow v0.10.0 system boundary
+## TripFlow v0.10.1 system boundary
 
 TripFlow separates language understanding, external data, and state mutation:
 

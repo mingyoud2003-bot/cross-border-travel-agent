@@ -13,7 +13,8 @@ const CITY_TIMEZONES = {
   paris:"Europe/Paris", 巴黎:"Europe/Paris", london:"Europe/London", 伦敦:"Europe/London", vienna:"Europe/Vienna", 维也纳:"Europe/Vienna", zurich:"Europe/Zurich", 苏黎世:"Europe/Zurich", rome:"Europe/Rome", 罗马:"Europe/Rome",
   madrid:"Europe/Madrid", 马德里:"Europe/Madrid", barcelona:"Europe/Madrid", 巴塞罗那:"Europe/Madrid", amsterdam:"Europe/Amsterdam", 阿姆斯特丹:"Europe/Amsterdam", brussels:"Europe/Brussels", 布鲁塞尔:"Europe/Brussels", monaco:"Europe/Monaco", 摩纳哥:"Europe/Monaco",
   beijing:"Asia/Shanghai", 北京:"Asia/Shanghai", shanghai:"Asia/Shanghai", 上海:"Asia/Shanghai", wuhan:"Asia/Shanghai", 武汉:"Asia/Shanghai",
-  zhumadian:"Asia/Shanghai", 驻马店:"Asia/Shanghai",
+  zhumadian:"Asia/Shanghai", 驻马店:"Asia/Shanghai", jinan:"Asia/Shanghai", 济南:"Asia/Shanghai", shenzhen:"Asia/Shanghai", 深圳:"Asia/Shanghai",
+  "hong kong":"Asia/Hong_Kong", hongkong:"Asia/Hong_Kong", 香港:"Asia/Hong_Kong", "los angeles":"America/Los_Angeles", 洛杉矶:"America/Los_Angeles",
   tokyo:"Asia/Tokyo", 东京:"Asia/Tokyo", osaka:"Asia/Tokyo", 大阪:"Asia/Tokyo", singapore:"Asia/Singapore", 新加坡:"Asia/Singapore",
   "new york":"America/New_York", 纽约:"America/New_York",
 };
@@ -37,7 +38,7 @@ function toast(message) {
 
 function initializeTimezoneSelects() {
   for (const id of ["origin-timezone", "destination-timezone"]) {
-    $(id).innerHTML = TIMEZONES.map((zone) => `<option value="${zone}">${zone}</option>`).join("");
+    $(id).innerHTML = '<option value="">请选择时区</option>' + TIMEZONES.map((zone) => `<option value="${zone}">${zone}</option>`).join("");
   }
 }
 initializeTimezoneSelects();
@@ -166,7 +167,7 @@ function fillImportCandidate(candidate) {
     const item=candidate.transport; $("manual-kind").value="transport"; $("manual-kind").dispatchEvent(new Event("change"));
     $("mode").value=item.mode; $("operator").value=item.operator||""; $("service-number").value=item.service_number||"";
     $("origin-city").value=item.origin.city||""; $("destination-city").value=item.destination.city||""; $("origin-name").value=item.origin.name||""; $("destination-name").value=item.destination.name||"";
-    if(item.origin.timezone)ensureTimezoneOption("origin-timezone",item.origin.timezone); if(item.destination.timezone)ensureTimezoneOption("destination-timezone",item.destination.timezone);
+    prepareCandidateTimezone("origin-city","origin-timezone",item.origin.timezone); prepareCandidateTimezone("destination-city","destination-timezone",item.destination.timezone);
     $("departure-at").value=localInput(item.departure_at); $("arrival-at").value=localInput(item.arrival_at); $("transport-submit").textContent="补全并确认导入";
   } else {
     const item=candidate.stay; $("manual-kind").value="stay"; $("manual-kind").dispatchEvent(new Event("change"));
@@ -285,15 +286,28 @@ $("manual-kind").addEventListener("change", () => {
 });
 
 for (const id of ["origin-city","destination-city"]) {
-  $(id).addEventListener("input", () => { const prefix=id.startsWith("origin")?"origin":"destination"; $(`${prefix}-timezone`).dataset.manual=""; });
+  $(id).addEventListener("input", () => {
+    const prefix=id.startsWith("origin")?"origin":"destination";
+    const timezone=$(`${prefix}-timezone`);
+    timezone.dataset.manual="";
+    if (!CITY_TIMEZONES[$(id).value.trim().toLowerCase()]) timezone.value="";
+  });
   $(id).addEventListener("change", () => applyCityTimezone(id));
 }
 for (const id of ["origin-timezone","destination-timezone"]) $(id).addEventListener("change", () => { $(id).dataset.manual="1"; });
 function applyCityTimezone(cityId) {
   const prefix = cityId.startsWith("origin") ? "origin" : "destination";
+  const select = $(`${prefix}-timezone`);
   const zone = CITY_TIMEZONES[$(cityId).value.trim().toLowerCase()];
   if (zone) ensureTimezoneOption(`${prefix}-timezone`, zone);
-  return Boolean(zone || $(`${prefix}-timezone`).dataset.manual);
+  return Boolean(zone || (select.dataset.manual && select.value));
+}
+function prepareCandidateTimezone(cityId, timezoneId, provided) {
+  const select=$(timezoneId);
+  select.dataset.manual="";
+  if (provided) { ensureTimezoneOption(timezoneId,provided); return; }
+  const zone=CITY_TIMEZONES[$(cityId).value.trim().toLowerCase()];
+  if (zone) ensureTimezoneOption(timezoneId,zone); else select.value="";
 }
 function ensureTimezoneOption(id, zone) {
   const select = $(id);

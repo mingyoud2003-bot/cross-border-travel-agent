@@ -38,6 +38,41 @@ def test_location_canonicalizes_chinese_and_english_city_to_same_identity():
     assert english.city_id == chinese.city_id == "DEFRA"
 
 
+@pytest.mark.parametrize(
+    ("english", "chinese", "timezone", "city_id"),
+    [
+        ("Jinan", "济南", "Asia/Shanghai", "CNTNA"),
+        ("Shenzhen", "深圳", "Asia/Shanghai", "CNSZX"),
+        ("Hong Kong", "香港", "Asia/Hong_Kong", "HKHKG"),
+        ("Los Angeles", "洛杉矶", "America/Los_Angeles", "USLAX"),
+    ],
+)
+def test_new_bilingual_city_aliases_resolve_to_correct_timezone(
+    english, chinese, timezone, city_id
+):
+    first = location(english, english, timezone)
+    second = location(chinese, chinese, timezone)
+
+    assert first.city == second.city == chinese
+    assert first.city_id == second.city_id == city_id
+
+
+def test_hong_kong_to_los_angeles_local_times_are_ordered_by_timezone():
+    item = TransportInput(
+        mode="flight",
+        operator="United Airlines",
+        service_number="UA153",
+        origin=location("Hong Kong International T1", "香港", "Asia/Hong_Kong"),
+        destination=location(
+            "Los Angeles International T7", "洛杉矶", "America/Los_Angeles"
+        ),
+        departure_at="2026-09-18T12:40",
+        arrival_at="2026-09-18T11:10",
+    )
+
+    assert item.arrival_at > item.departure_at
+
+
 def test_location_does_not_trust_identity_for_an_unresolved_city():
     item = Location(
         name="Atlantis Central",
