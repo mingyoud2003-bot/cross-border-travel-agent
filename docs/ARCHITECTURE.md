@@ -1,6 +1,6 @@
 # Architecture and design decisions
 
-## TripFlow v0.9.1 system boundary
+## TripFlow v0.9.2 system boundary
 
 TripFlow separates language understanding, external data, and state mutation:
 
@@ -82,6 +82,9 @@ For TripFlow, the current invariants are:
    delta are merged and normalized by application code.
 7. Client/model supplied city identities are never trusted; canonical IDs are
    recomputed from a city alias plus a non-contradictory timezone.
+8. Assistant prose cannot claim a candidate is recorded or reviewable. The API
+   derives its reply and `ready_for_confirmation` from the same normalized draft;
+   the UI retains a reopenable review action for every ready candidate.
 
 The retained Atlas control plane adds these legacy decision-workflow invariants:
 

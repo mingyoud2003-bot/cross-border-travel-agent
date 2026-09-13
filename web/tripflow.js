@@ -54,7 +54,8 @@ $("create-form").addEventListener("submit", async (event) => {
 async function loadConversation() {
   conversationState = await api(`/api/trips/${trip.id}/conversation`);
   renderMessages(conversationState.messages || []);
-  if (conversationState.ready_for_confirmation) openCandidateDialog(conversationState.draft);
+  syncPendingReview();
+  if (conversationState.ready_for_confirmation && !openCandidateDialog(conversationState.draft)) toast("候选状态异常，请继续补充信息后重试。");
 }
 
 $("chat-form").addEventListener("submit", async (event) => {
@@ -68,7 +69,8 @@ $("chat-form").addEventListener("submit", async (event) => {
   try {
     conversationState = await api(`/api/trips/${trip.id}/conversation`, { method:"POST", body:JSON.stringify({message}) });
     renderMessages(conversationState.messages);
-    if (conversationState.ready_for_confirmation) openCandidateDialog(conversationState.draft);
+    syncPendingReview();
+    if (conversationState.ready_for_confirmation && !openCandidateDialog(conversationState.draft)) toast("候选状态异常，请继续补充信息后重试。");
   } catch (error) {
     renderMessages(conversationState?.messages || []);
     toast(error.message);
@@ -90,6 +92,7 @@ $("reset-chat").addEventListener("click", async () => {
     currentProposal = null;
     $("candidate-dialog").close();
     renderMessages([]);
+    syncPendingReview();
     toast("已开始新任务，已确认行程不受影响。");
   } catch (error) { toast(error.message); }
 });
@@ -114,10 +117,19 @@ function openCandidateDialog(proposal) {
   });
   (proposal.transports || []).forEach((item, index) => { if (!(item.missing_fields || []).length) cards.push(renderTransportCandidate(item, index)); });
   (proposal.stays || []).forEach((item, index) => { if (!(item.missing_fields || []).length) cards.push(renderStayCandidate(item, index)); });
-  if (!cards.length) return;
+  if (!cards.length) return false;
   $("candidate-content").innerHTML = cards.join("");
   if (!$("candidate-dialog").open) $("candidate-dialog").showModal();
+  return true;
 }
+
+function syncPendingReview() {
+  $("review-pending").classList.toggle("hidden", !conversationState?.ready_for_confirmation);
+}
+
+$("review-pending").addEventListener("click", () => {
+  if (!openCandidateDialog(conversationState?.draft || {})) toast("当前没有可核对的完整候选。");
+});
 
 function renderProviderCandidate(item, outcome) {
   return `<article class="provider-outcome candidate-card"><div class="provider-head"><h3>${escapeHtml(item.operator)} ${escapeHtml(item.flight_number)}</h3><span class="live-badge">${escapeHtml(item.flight_status)}</span></div><p><b>${escapeHtml(item.origin.city)} → ${escapeHtml(item.destination.city)}</b></p><p>${escapeHtml(item.origin.name)} → ${escapeHtml(item.destination.name)}</p><p>${escapeHtml(zonedDisplay(item.departure_at,item.origin.timezone))} → ${escapeHtml(zonedDisplay(item.arrival_at,item.destination.timezone))}</p><small>联网时间 ${escapeHtml(item.checked_at)} · ${outcome.cached ? "缓存结果" : "实时请求"}</small><br><a class="attribution" href="${escapeHtml(outcome.attribution_url)}" target="_blank" rel="noreferrer">Flight data by AeroDataBox</a><button class="primary" data-confirm-kind="provider" data-candidate-id="${escapeHtml(item.candidate_id)}">确认并加入行程</button></article>`;
@@ -158,6 +170,7 @@ async function finishConversationDraft() {
   currentProposal = null;
   $("candidate-dialog").close();
   renderMessages([]);
+  syncPendingReview();
 }
 
 function candidateTransportPayload(item) {

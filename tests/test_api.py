@@ -97,6 +97,7 @@ def test_web_ui_and_static_assets_are_served():
     assert 'id="stay-form"' in page.text
     assert tripflow_script.status_code == 200
     assert "ready_for_confirmation" in tripflow_script.text
+    assert "review-pending" in tripflow_script.text
     assert "/conversation" in tripflow_script.text
     assert "escapeHtml" in tripflow_script.text
 

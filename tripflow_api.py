@@ -330,7 +330,10 @@ def _conversation_reply(
     ready: bool,
 ) -> str:
     if ready:
-        return "信息已经整理好了。我打开了确认卡，请核对后决定是否加入行程。"
+        return (
+            "候选信息已经完整，请核对待确认信息。"
+            "只有你点击确认后，它才会加入右侧行程。"
+        )
     if proposal.provider_lookups:
         return proposal.provider_lookups[0].message
     missing_lookup = [
@@ -348,5 +351,26 @@ def _conversation_reply(
         for field in item.missing_fields
     ]
     if incomplete:
-        return model_reply or "还缺少一项关键信息，请继续补充。"
-    return model_reply or "你可以告诉我要整理的航班、火车或住宿信息。"
+        return _missing_field_question(incomplete[0])
+    # The model's prose is intentionally not returned here. It can describe a
+    # successful state that deterministic normalization did not produce.
+    return "我还没有识别出可核对的行程信息。请告诉我航班、火车或住宿信息。"
+
+
+def _missing_field_question(field: str) -> str:
+    questions = {
+        "operator": "还需要运营商或承运方，例如 Deutsche Bahn、SNCF 或 Lufthansa。",
+        "origin.name": "还需要出发车站或机场；如果不确定，可以直接回复出发城市。",
+        "origin.city": "还需要明确的出发城市。",
+        "origin.timezone": "出发城市的时区还无法确定，请换用城市的常用中英文名称。",
+        "destination.name": "还需要到达车站或机场；如果不确定，可以直接回复到达城市。",
+        "destination.city": "还需要明确的到达城市。",
+        "destination.timezone": "到达城市的时区还无法确定，请换用城市的常用中英文名称。",
+        "departure_at": "还需要包含日期的明确出发时间，例如 2026-10-26 08:30。",
+        "arrival_at": "还需要包含日期的明确到达时间，例如 2026-10-26 12:30。",
+        "property_name": "还需要酒店或住宿名称。",
+        "city": "还需要住宿所在城市。",
+        "check_in": "还需要明确的入住日期，例如 2026-10-26。",
+        "check_out": "还需要明确的退房日期，例如 2026-10-28。",
+    }
+    return questions.get(field, "还缺少一项关键信息，请继续补充。")

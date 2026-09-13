@@ -148,6 +148,24 @@ class FakeConversationService:
         )
 
 
+class LyingConversationService:
+    async def respond(self, messages, draft):
+        return (
+            "信息已记录，等待你确认。",
+            ItineraryProposal(
+                transports=[
+                    TransportCandidate(
+                        mode="train",
+                        operator="DB",
+                        origin=LocationCandidate(name="Berlin", city="Berlin"),
+                        destination=LocationCandidate(),
+                        missing_fields=["destination.city"],
+                    )
+                ]
+            ),
+        )
+
+
 def client() -> TestClient:
     app = FastAPI()
     app.include_router(
@@ -192,6 +210,19 @@ def conversation_client() -> TestClient:
             FlightLookupProposalService(),
             FakeFlightProvider(),
             FakeConversationService(),
+        )
+    )
+    return TestClient(app)
+
+
+def lying_conversation_client() -> TestClient:
+    app = FastAPI()
+    app.include_router(
+        build_tripflow_router(
+            TripFlowService(),
+            FlightLookupProposalService(),
+            FakeFlightProvider(),
+            LyingConversationService(),
         )
     )
     return TestClient(app)
@@ -353,6 +384,21 @@ def test_conversation_persists_missing_state_then_opens_confirmation_candidate()
     assert second.json()["ready_for_confirmation"] is True
     assert second.json()["draft"]["provider_lookups"][0]["status"] == "found"
     assert len(restored.json()["messages"]) == 4
+
+
+def test_incomplete_draft_overrides_false_model_confirmation_claim():
+    api = lying_conversation_client()
+    trip = api.post("/api/trips", json={"title": "Grounded reply"}).json()
+
+    response = api.post(
+        f"/api/trips/{trip['id']}/conversation",
+        json={"message": "从柏林出发"},
+    )
+
+    body = response.json()
+    assert body["ready_for_confirmation"] is False
+    assert body["messages"][-1]["content"] == "还需要明确的到达城市。"
+    assert "已记录" not in body["messages"][-1]["content"]
 
 
 def test_conversation_reset_clears_draft_and_messages():

@@ -27,7 +27,9 @@ switches, and derives a bounded set of city timezones so users are never asked f
 IANA identifiers. The same deterministic layer maps grounded Chinese/English city
 aliases to a server-owned identity; it removes model-proposed cities and facilities
 that do not occur in user evidence. A model reply that claims a field was collected cannot authorize
-a lookup unless that field is present in the normalized structured draft.
+a lookup unless that field is present in the normalized structured draft. The public
+assistant reply is also derived from that final draft: it asks for the first actual
+missing field or announces a reviewable candidate, never a model-proposed success.
 
 ## Legacy Atlas Agent
 
