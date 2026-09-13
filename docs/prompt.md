@@ -31,6 +31,14 @@ a lookup unless that field is present in the normalized structured draft. The pu
 assistant reply is also derived from that final draft: it asks for the first actual
 missing field or announces a reviewable candidate, never a model-proposed success.
 
+`document_extraction_agent` in `tripflow_imports.py` receives one validated image or
+PDF at a time and returns all visible transport/stay candidates. Document content and
+optional user context are untrusted data, not executable instructions. The Agent has
+no tools and cannot write state. Deterministic code canonicalizes known cities,
+rejects incomplete dates/times, recomputes missing fields, and creates a persistent
+sequential review queue. User corrections are attributed separately from visible
+document facts.
+
 ## Legacy Atlas Agent
 
 The executable prompt is `BASE_INSTRUCTIONS` in `agent.py`; dynamic instructions

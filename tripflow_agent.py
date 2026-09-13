@@ -29,6 +29,7 @@ class TransportCandidate(BaseModel):
     status: Literal["draft", "confirmed", "cancelled"] = "draft"
     missing_fields: list[str] = Field(default_factory=list)
     source_excerpt: str = ""
+    source_page: int | None = Field(default=None, ge=1)
 
 
 class StayCandidate(BaseModel):
@@ -40,6 +41,7 @@ class StayCandidate(BaseModel):
     status: Literal["draft", "confirmed", "cancelled"] = "draft"
     missing_fields: list[str] = Field(default_factory=list)
     source_excerpt: str = ""
+    source_page: int | None = Field(default=None, ge=1)
 
 
 class FlightLookupRequest(BaseModel):

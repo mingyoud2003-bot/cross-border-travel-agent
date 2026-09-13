@@ -9,30 +9,34 @@ python scripts/demo_product.py
 
 ## Story
 
-1. In TripFlow, say only `帮我查 LH400`. Show that the Agent asks only for the exact
+1. Upload a PDF or screenshot containing two bookings. Show that one artifact becomes
+   two typed candidates while the confirmed itinerary remains unchanged.
+2. Confirm the complete item, then complete one missing field on the second. Show
+   document provenance on visible fields and form provenance on the corrected field.
+3. In TripFlow, say only `帮我查 LH400`. Show that the Agent asks only for the exact
    departure date and no provider call occurs yet.
-2. Reply `出发日期是 2026-09-12`. Show the structured draft combining both turns and
+4. Reply `出发日期是 2026-09-12`. Show the structured draft combining both turns and
    the provider candidate appearing in a review dialog, while the timeline remains
    unchanged.
-3. Confirm the matching candidate. Show server-owned provider provenance, the
+5. Confirm the matching candidate. Show server-owned provider provenance, the
    version increment, conflict detection, and ICS export. Contrast this with a broad
    “北京到巴黎机票多少钱” request, which must not spend a provider call.
-4. Expand the right-side compact manual entry: city and operator are selectable;
+6. Expand the right-side compact manual entry: city and operator are selectable;
    station and timezone overrides stay outside the primary flow.
-5. Add a train arriving in `法兰克福` at 10:00 and a flight leaving `Frankfurt`
+7. Add a train arriving in `法兰克福` at 10:00 and a flight leaving `Frankfurt`
    at 10:55 with a 90-minute threshold. Show the unified `DEFRA` identity, Chinese
    city display, and deterministic 55-minute connection warning.
-6. In the legacy view, submit a decision request without taxes. Show that the Agent asks only for the
-   missing value and does not call an unauthorized tool.
-7. Add taxes and BA Silver status. Show the ordered railway, deterministic mileage,
+8. In the legacy view, submit a decision request without taxes. Show that the Agent asks
+   only for the missing value and does not call an unauthorized tool.
+9. Add taxes and BA Silver status. Show the ordered railway, deterministic mileage,
    grounded loyalty, and decision-composer calls in Trace; show turn-level provenance
    in State.
-8. Change only the cash price. Show that the railway and loyalty results are retained,
-   mileage is recomputed, and the recommendation changes.
-9. Refresh/restart the service and reopen the session endpoint to demonstrate SQLite
-   persistence.
-10. Open `/metrics` and the Eval report to connect the UI behavior to operational and
-   regression evidence.
+10. Change only the cash price. Show that the railway and loyalty results are retained,
+    mileage is recomputed, and the recommendation changes.
+11. Refresh/restart the service and reopen the session endpoint to demonstrate SQLite
+    persistence.
+12. Open `/metrics` and the Eval report to connect the UI behavior to operational and
+    regression evidence.
 
 ## Interview explanation
 
@@ -51,3 +55,5 @@ from actual failure modes, including stale-answer reuse after user corrections.
 - The local deployment is single-worker; distributed coordination is documented but
   not claimed as implemented.
 - The project provides decision support and never purchases a ticket.
+- OCR/vision extraction may miss low-quality or unusual layouts, so every imported
+  candidate remains approval-gated; the public demo does not retain raw uploads.

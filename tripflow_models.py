@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from location_catalog import resolve_city
 
 
-SourceType = Literal["form", "text", "pdf", "image", "provider"]
+SourceType = Literal["form", "text", "pdf", "image", "provider", "catalog"]
 ReservationStatus = Literal["draft", "confirmed", "cancelled"]
 TransportMode = Literal["flight", "train"]
 

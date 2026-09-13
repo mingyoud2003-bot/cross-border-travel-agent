@@ -5,6 +5,8 @@ let currentProposal = null;
 let editingTransportId = null;
 let editingStayId = null;
 let editingStayAddress = null;
+let activeImportBatch = null;
+let importCandidateContext = null;
 
 const CITY_TIMEZONES = {
   berlin:"Europe/Berlin", 柏林:"Europe/Berlin", cologne:"Europe/Berlin", köln:"Europe/Berlin", 科隆:"Europe/Berlin", frankfurt:"Europe/Berlin", 法兰克福:"Europe/Berlin", munich:"Europe/Berlin", 慕尼黑:"Europe/Berlin",
@@ -18,10 +20,11 @@ const CITY_TIMEZONES = {
 const TIMEZONES = [...new Set(["Asia/Shanghai", ...Object.values(CITY_TIMEZONES)])];
 
 async function api(path, options = {}) {
-  const response = await fetch(path, { ...options, headers:{"Content-Type":"application/json", ...(options.headers || {})} });
+  const formData = options.body instanceof FormData;
+  const response = await fetch(path, { ...options, headers:{...(formData ? {} : {"Content-Type":"application/json"}), ...(options.headers || {})} });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(typeof body.detail === "string" ? body.detail : `Request failed: ${response.status}`);
+    throw new Error(typeof body.detail === "string" ? body.detail : `请求失败：${response.status}`);
   }
   return response.status === 204 ? null : response.json();
 }
@@ -46,7 +49,7 @@ $("create-form").addEventListener("submit", async (event) => {
     $("create-view").classList.add("hidden");
     $("workspace").classList.remove("hidden");
     setDefaultTimezones();
-    await Promise.all([render(), loadConversation()]);
+    await Promise.all([render(), loadConversation(), loadImports()]);
     $("chat-input").focus();
   } catch (error) { toast(error.message); }
 });
@@ -62,11 +65,23 @@ $("chat-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const input = $("chat-input");
   const message = input.value.trim();
-  if (!message) return;
+  const files = [...$("trip-files").files];
+  if (!message && !files.length) return;
   input.value = "";
-  renderPendingMessage(message);
+  renderPendingMessage(message || `上传 ${files.length} 个行程文件`);
   $("chat-send").disabled = true;
   try {
+    if (files.length) {
+      const body = new FormData();
+      files.forEach((file) => body.append("files", file));
+      body.append("instructions", message);
+      activeImportBatch = await api(`/api/trips/${trip.id}/imports`, {method:"POST",body});
+      $("trip-files").value=""; renderSelectedFiles();
+      renderImportQueue();
+      document.querySelector(".message.pending")?.remove();
+      appendAssistantMessage(`已分析 ${activeImportBatch.documents.length} 个文件，识别出 ${activeImportBatch.candidates.length} 条候选。请在右侧逐条核对。`);
+      return;
+    }
     conversationState = await api(`/api/trips/${trip.id}/conversation`, { method:"POST", body:JSON.stringify({message}) });
     renderMessages(conversationState.messages);
     syncPendingReview();
@@ -76,6 +91,89 @@ $("chat-form").addEventListener("submit", async (event) => {
     toast(error.message);
   } finally { $("chat-send").disabled = false; input.focus(); }
 });
+
+$("trip-files").addEventListener("change", renderSelectedFiles);
+function renderSelectedFiles() {
+  const files=[...$("trip-files").files];
+  $("selected-files").classList.toggle("hidden",!files.length);
+  $("selected-files").innerHTML=files.map((file)=>`<span class="file-chip">${escapeHtml(file.name)} · ${formatBytes(file.size)}</span>`).join("");
+}
+function formatBytes(value) { return value < 1024*1024 ? `${Math.ceil(value/1024)} KB` : `${(value/1024/1024).toFixed(1)} MB`; }
+function appendAssistantMessage(message) {
+  $("chat-messages").insertAdjacentHTML("beforeend",`<div class="message assistant"><span>TF</span><p>${escapeHtml(message)}</p></div>`);
+  $("chat-messages").scrollTop=$("chat-messages").scrollHeight;
+}
+
+async function loadImports() {
+  const batches=await api(`/api/trips/${trip.id}/imports`);
+  activeImportBatch=batches.find((batch)=>batch.candidates.some((item)=>item.review_status === "pending")) || batches[0] || null;
+  renderImportQueue();
+}
+
+function renderImportQueue() {
+  const container=$("import-queue");
+  if (!activeImportBatch) { container.classList.add("hidden"); container.innerHTML=""; return; }
+  const all=activeImportBatch.candidates;
+  const pending=all.filter((item)=>item.review_status === "pending");
+  const done=all.length-pending.length;
+  const failed=activeImportBatch.documents.filter((item)=>item.status === "failed");
+  const failureNote=failed.length ? `<p class="missing-list">${failed.length} 个文件解析失败：${failed.map((item)=>`${escapeHtml(item.filename)}（${escapeHtml(item.error || "请重试")}）`).join("、")}</p>` : "";
+  container.classList.remove("hidden");
+  if (!pending.length) {
+    container.innerHTML=`<div class="import-head"><div><p class="eyebrow">IMPORT COMPLETE</p><h3>本批次已核对完成</h3></div><span class="import-progress">${done}/${all.length}</span></div>${failureNote}`;
+    return;
+  }
+  const candidate=pending[0];
+  const item=candidate.kind === "transport" ? candidate.transport : candidate.stay;
+  const title=candidate.kind === "transport" ? `${item.mode === "flight"?"航班":"火车"} · ${item.operator || "待补充运营商"}` : `住宿 · ${item.property_name || "待补充名称"}`;
+  const detail=candidate.kind === "transport"
+    ? `${escapeHtml(item.origin.city || "?")} → ${escapeHtml(item.destination.city || "?")}<br>${escapeHtml(item.departure_at || "?")} → ${escapeHtml(item.arrival_at || "?")}`
+    : `${escapeHtml(item.city || "?")} · ${escapeHtml(item.check_in || "?")} → ${escapeHtml(item.check_out || "?")}`;
+  const missing=candidate.missing_fields.length ? `<p class="missing-list">还需补全：${escapeHtml(candidate.missing_fields.map(missingLabel).join("、"))}</p>` : "";
+  const duplicate=candidate.duplicate_of ? '<p class="duplicate-warning">疑似与本批次上一条候选重复</p>' : "";
+  const primary=candidate.missing_fields.length ? "补全并确认" : candidate.duplicate_of ? "仍然添加" : "确认并加入";
+  container.innerHTML=`<div class="import-head"><div><p class="eyebrow">IMPORT REVIEW</p><h3>逐条核对导入候选</h3></div><span class="import-progress">${done+1}/${all.length}</span></div>${failureNote}<article class="import-candidate"><h4>${escapeHtml(title)}</h4><p>${detail}</p>${missing}${duplicate}<small class="import-source">来源：${escapeHtml(candidate.source_filename)}${candidate.source_page?` · 第 ${candidate.source_page} 页`:""}${candidate.source_excerpt?` · “${escapeHtml(candidate.source_excerpt)}”`:""}</small><div class="import-actions"><button class="ghost mini" data-import-action="skip" data-id="${candidate.id}">跳过</button><button class="primary mini" data-import-action="confirm" data-id="${candidate.id}">${primary}</button></div></article>`;
+}
+
+function missingLabel(value) { return ({operator:"运营商","origin.name":"出发站/机场","origin.city":"出发城市","origin.timezone":"出发城市时区","destination.name":"到达站/机场","destination.city":"到达城市","destination.timezone":"到达城市时区",departure_at:"出发时间",arrival_at:"到达时间",property_name:"住宿名称",city:"住宿城市",check_in:"入住日期",check_out:"退房日期"})[value] || value; }
+
+$("import-queue").addEventListener("click",async(event)=>{
+  const button=event.target.closest("button[data-import-action]"); if(!button)return;
+  const candidate=activeImportBatch.candidates.find((item)=>item.id===button.dataset.id); if(!candidate)return;
+  if(button.dataset.importAction==="skip") {
+    try {
+      activeImportBatch=await api(`/api/trips/${trip.id}/imports/${activeImportBatch.id}/candidates/${candidate.id}/skip`,{method:"POST",body:"{}"});
+      if(importCandidateContext?.candidateId===candidate.id) {
+        importCandidateContext=null;
+        candidate.kind==="transport" ? resetTransportForm() : resetStayForm();
+      }
+      renderImportQueue();
+    } catch(error){toast(error.message);} return;
+  }
+  if(candidate.missing_fields.length) { fillImportCandidate(candidate); return; }
+  button.disabled=true;
+  try {
+    const result=await api(`/api/trips/${trip.id}/imports/${activeImportBatch.id}/candidates/${candidate.id}/confirm`,{method:"POST",headers:{"If-Match":String(trip.version)},body:JSON.stringify({force_duplicate:Boolean(candidate.duplicate_of)})});
+    trip=result.trip; activeImportBatch=result.batch; await render(); renderImportQueue(); toast("候选已加入行程。");
+  } catch(error){await recoverVersion(error);button.disabled=false;}
+});
+
+function fillImportCandidate(candidate) {
+  importCandidateContext={batchId:activeImportBatch.id,candidateId:candidate.id,kind:candidate.kind,forceDuplicate:Boolean(candidate.duplicate_of)};
+  editingTransportId=null; editingStayId=null; editingStayAddress=null;
+  $("manual-panel").open=true;
+  if(candidate.kind==="transport") {
+    const item=candidate.transport; $("manual-kind").value="transport"; $("manual-kind").dispatchEvent(new Event("change"));
+    $("mode").value=item.mode; $("operator").value=item.operator||""; $("service-number").value=item.service_number||"";
+    $("origin-city").value=item.origin.city||""; $("destination-city").value=item.destination.city||""; $("origin-name").value=item.origin.name||""; $("destination-name").value=item.destination.name||"";
+    if(item.origin.timezone)ensureTimezoneOption("origin-timezone",item.origin.timezone); if(item.destination.timezone)ensureTimezoneOption("destination-timezone",item.destination.timezone);
+    $("departure-at").value=localInput(item.departure_at); $("arrival-at").value=localInput(item.arrival_at); $("transport-submit").textContent="补全并确认导入";
+  } else {
+    const item=candidate.stay; $("manual-kind").value="stay"; $("manual-kind").dispatchEvent(new Event("change"));
+    $("property-name").value=item.property_name||""; $("stay-city").value=item.city||""; $("check-in").value=item.check_in||""; $("check-out").value=item.check_out||""; $("stay-submit").textContent="补全并确认导入";
+  }
+  $("manual-panel").scrollIntoView({behavior:"smooth"});
+}
 
 $("chat-input").addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); $("chat-form").requestSubmit(); }
@@ -216,7 +314,16 @@ $("transport-form").addEventListener("submit", async (event) => {
   const originCity = $("origin-city").value.trim();
   const destinationCity = $("destination-city").value.trim();
   const payload = { mode:$("mode").value, operator:$("operator").value, service_number:$("service-number").value || null, origin:{name:$("origin-name").value || originCity,city:originCity,timezone:$("origin-timezone").value}, destination:{name:$("destination-name").value || destinationCity,city:destinationCity,timezone:$("destination-timezone").value}, departure_at:$("departure-at").value,arrival_at:$("arrival-at").value,source:{source_type:"form",source_excerpt:"user-confirmed compact form",confirmed_by_user:true} };
-  try { trip = await saveTransport(payload); resetTransportForm(); await render(); toast(wasEditing ? "交通已更新。" : "交通已添加。"); } catch (error) { await recoverVersion(error); }
+  try {
+    if (importCandidateContext) {
+      if (importCandidateContext.kind !== "transport") throw new Error("当前待补全候选是住宿，请切换回住宿表单。");
+      const result=await confirmCompletedImport({transport:payload,force_duplicate:importCandidateContext.forceDuplicate});
+      trip=result.trip; activeImportBatch=result.batch; importCandidateContext=null;
+      resetTransportForm(); await render(); renderImportQueue(); toast("已补全并加入行程。");
+    } else {
+      trip = await saveTransport(payload); resetTransportForm(); await render(); toast(wasEditing ? "交通已更新。" : "交通已添加。");
+    }
+  } catch (error) { await recoverVersion(error); }
 });
 
 async function saveTransport(payload) {
@@ -227,8 +334,23 @@ async function saveTransport(payload) {
 $("stay-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const payload = {property_name:$("property-name").value,city:$("stay-city").value,address:editingStayAddress,check_in:$("check-in").value,check_out:$("check-out").value,source:{source_type:"form",source_excerpt:"user-confirmed compact form",confirmed_by_user:true}};
-  try { trip = await saveStay(payload); resetStayForm(); await render(); toast("住宿已保存。"); } catch (error) { await recoverVersion(error); }
+  try {
+    if (importCandidateContext) {
+      if (importCandidateContext.kind !== "stay") throw new Error("当前待补全候选是交通，请切换回交通表单。");
+      const result=await confirmCompletedImport({stay:payload,force_duplicate:importCandidateContext.forceDuplicate});
+      trip=result.trip; activeImportBatch=result.batch; importCandidateContext=null;
+      resetStayForm(); await render(); renderImportQueue(); toast("已补全并加入行程。");
+    } else {
+      trip = await saveStay(payload); resetStayForm(); await render(); toast("住宿已保存。");
+    }
+  } catch (error) { await recoverVersion(error); }
 });
+
+async function confirmCompletedImport(payload) {
+  const context=importCandidateContext;
+  if (!context) throw new Error("导入候选已失效，请重新选择。");
+  return api(`/api/trips/${trip.id}/imports/${context.batchId}/candidates/${context.candidateId}/confirm`,{method:"POST",headers:{"If-Match":String(trip.version)},body:JSON.stringify(payload)});
+}
 
 async function saveStay(payload) {
   const path = editingStayId ? `/api/trips/${trip.id}/stays/${editingStayId}` : `/api/trips/${trip.id}/stays`;
@@ -247,6 +369,8 @@ $("timeline").addEventListener("click", async (event) => {
 });
 
 function fillManualForm(item) {
+  importCandidateContext=null;
+  editingTransportId=null; editingStayId=null; editingStayAddress=null;
   $("manual-panel").open = true;
   if (item.kind === "transport") {
     $("manual-kind").value="transport"; $("manual-kind").dispatchEvent(new Event("change")); editingTransportId=item.id;

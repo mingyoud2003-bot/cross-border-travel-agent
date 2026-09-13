@@ -1,24 +1,28 @@
 # TripFlow Travel Operations Agent
 
-面向自由行用户的对话式行程整理 Agent。用户可以从不完整信息开始，Agent 基于
+面向自由行用户的多模态行程整理 Agent。用户可以从不完整信息开始，Agent 基于
 持久化 structured draft 逐轮补全、处理条件修改与任务切换；信息完整后才弹出确认
 候选。确认后系统才会写入航班、火车和住宿行程，检查
 时间重叠与换乘不足，最后导出带稳定 UID 的 ICS 日历。
 
-v0.9.2 支持用户先说“帮我查 LH400”，再在下一轮补充日期。Agent 只提取
+v0.10.0 新增批量图片/PDF 导入：单个文件可提取多段航班、火车和住宿，
+多文件可并发解析并将失败隔离。候选按顺序逐条展示：完整项可直接确认，缺失项预填到
+紧凑表单后再确认。文件原始字节不落盘，仅持久化文件元数据、应用重建的路线/日期摘要和结构化候选。
+
+对话路径支持用户先说“帮我查 LH400”，再在下一轮补充日期。Agent 只提取
 有原文证据的航班号与日期，应用代码调用 AeroDataBox，返回带运营商、机场、时区、
 计划时间和运行状态的候选。Provider 候选绑定当前行程、15 分钟过期且只能确认一次；
 未经用户确认不会写入 state。
 
 火车不限定为 Eurostar：运营商是可追溯的自由文本字段，Deutsche Bahn、SNCF、ÖBB、
-Renfe、中国铁路、JR 及其他运营商均可记录。截图/PDF 不是冷启动前提，当前主路径是
-文字与表单。
+Renfe、中国铁路、JR 及其他运营商均可记录。截图/PDF 不是冷启动前提，
+文字对话、文件导入与紧凑表单都是一等输入路径。
 
 ## TripFlow workflow
 
 ```mermaid
 flowchart LR
-    I[表单 / 对话文字] --> P[Agent typed proposal / lookup intent]
+    I[表单 / 对话 / 图片与 PDF] --> P[Agent typed candidates / lookup intent]
     P --> G{Deterministic grounding + tool gate}
     G --> A[AeroDataBox candidate]
     G --> C[用户补全与确认]
@@ -31,6 +35,9 @@ flowchart LR
 ### 可靠性边界
 
 - Agent 没有修改行程的工具；候选解析 API 不会改变已确认 state。
+- 文件导入最多 10 份，单份 10 MB、合计 30 MB；只接受校验过 magic bytes 的 PDF/JPEG/PNG/WEBP。
+- 每份文件独立解析，同一批中的相同文件只调用一次模型；部分失败不会丢失其他候选。
+- 导入候选必须逐条确认或跳过。文件已有字段保留 PDF/图片来源，城市时区记为目录派生，用户补全或修正的字段单独记为表单来源。
 - 对话消息与 structured draft 按行程持久化；不完整字段只触发一次一个的追问。
 - 多轮合并由应用层校验，不能以自然语言回复“已获取”代替结构化字段更新。
 - 对话回复由规范化 draft 的确定性状态生成：字段不全时只追问真实缺项，完整时显示可重复打开的核对入口，杜绝“口头已记录但没有候选”。
@@ -133,7 +140,8 @@ python evals/run_agent_eval.py --category decision
 python evals/run_agent_eval.py --all
 ```
 
-当前确定性测试为 158/158。TripFlow Eval 数据集覆盖 100 个 case。原 90-case
+当前确定性测试为 170/170。TripFlow Eval 数据集覆盖 100 个 case。文件导入另有
+11 项确定性单元/API 测试，并已用合成行程图片跑通真实视觉模型路径。原 90-case
 抽取集首轮 83/90，针对否定语义增加确定性闸门，并将有原文证据的运营商/产品线分栏
 差异记录为有限等价值后，对同一批真实输出离线 regrade 为 90/90，基础设施失败为 0。
 v0.8 新增 10 个航班查询意图与成本/安全闸门 case，真实模型专项回归 10/10，
@@ -164,6 +172,8 @@ TripFlow 使用 `POST /api/trips`、单行程 `GET`、交通/住宿变更、冲�
 Provider 候选写入行程。v0.9 的 `GET/POST/DELETE /api/trips/{id}/conversation`
 分别恢复、继续和重置行程级对话草稿。在尚未引入账号隔离前，公开的全局行程列表被禁用，
 所有 TripFlow 写操作按 IP 限流；行程 ID 是高熵不可枚举标识符。
+`POST /api/trips/{id}/imports` 接收 multipart 批量文件，`GET .../imports`
+恢复未完成的核对队列，candidate `confirm/skip` 端点负责唯一状态迁移。
 
 同一会话通过 async lock 串行执行，不同会话可以并发。SDK 对话历史、业务
 structured state 与最近 30 条 trace 写入同一个 SQLite 文件的隔离表中，服务重启后
@@ -184,7 +194,7 @@ docker run --rm -p 8000:8000 \
 
 容器以非 root 用户运行，named volume 保存 SQLite 数据。当前限流器是面向单 worker
 部署的进程内保护；横向扩容时应替换为 Redis/API Gateway 限流。GitHub Actions 在
-每次 push/PR 执行 158 项测试、两套 Eval 数据集静态校验、JavaScript/Python
+每次 push/PR 执行 170 项测试、两套 Eval 数据集静态校验、JavaScript/Python
 语法检查和 Docker 构建；
 CI 不读取线上密钥，也不会产生模型费用。
 
@@ -214,6 +224,7 @@ python scripts/load_test.py --target session --requests 200 --concurrency 20
 ```text
 agent.py / tools.py / state.py     Agent reliability core
 tripflow_agent.py                  grounded extraction and multi-turn draft merging
+tripflow_imports.py                multimodal extraction, batch review and mixed provenance
 flight_provider.py                 bounded AeroDataBox lookup and candidate store
 tripflow_models.py / service.py    versioned itinerary and provenance
 tripflow_conflicts.py              deterministic timeline checks
@@ -238,7 +249,8 @@ scripts/load_test.py               cost-gated concurrency benchmark
 
 ## Scope
 
-本项目提供决策支持，不执行购票、查价或展示余票。航班核验由 AeroDataBox 提供，
+本项目提供决策支持，不执行购票、查价或展示余票。文件解析只处理 PDF/JPEG/PNG/WEBP，
+可能因扫描质量、复杂版式或手写内容而遗漏，因此永远需要用户核对。航班核验由 AeroDataBox 提供，
 免费方案只查询当前日期前后 365 天；可能存在无结果、延迟或额度耗尽，界面会明确
 显示并要求用户确认后才写入。铁路源当前只为受支持城市提供计划时刻且不含票价；
 常旅客知识库是有边界的小型策展语料。推荐策略是可解释的产品规则，不代表适用于

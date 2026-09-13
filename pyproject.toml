@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "travel-agent-v2"
-version = "0.9.2"
-description = "TripFlow: conversational, confirmation-gated itinerary management and conflict detection."
+version = "0.10.0"
+description = "TripFlow: multimodal, confirmation-gated itinerary management and conflict detection."
 requires-python = ">=3.11"
 
 dependencies = [
@@ -17,6 +17,7 @@ dependencies = [
     "pydantic>=2",
     "fastapi>=0.115",
     "uvicorn>=0.30",
+    "python-multipart>=0.0.9",
 ]
 
 [project.scripts]
@@ -59,6 +60,7 @@ py-modules = [
     "tripflow_agent",
     "flight_provider",
     "location_catalog",
+    "tripflow_imports",
 ]
 
 

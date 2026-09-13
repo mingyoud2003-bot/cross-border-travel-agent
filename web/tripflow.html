@@ -16,7 +16,7 @@
     <section class="hero compact-hero">
       <p class="eyebrow">CONVERSATIONAL TRAVEL OPERATIONS</p>
       <h1>告诉我已有的信息，剩下的逐步补齐。</h1>
-      <p class="lede">可以只说“帮我查 LH400”或“我订了柏林的酒店”。信息完整后才会出现确认卡，未经确认不会写入行程。</p>
+      <p class="lede">可以对话补全，也可以一次上传多份行程单、预订图片或 PDF。Agent 会拆分候选并逐条请你核对，未经确认不会写入行程。</p>
     </section>
 
     <section id="create-view" class="card create-card">
@@ -43,8 +43,9 @@
           <button class="suggestion" type="button" data-message="我想添加住宿">加住宿</button>
         </div>
         <form id="chat-form" class="chat-composer">
-          <textarea id="chat-input" rows="3" maxlength="2000" placeholder="例如：帮我查 LH400"></textarea>
-          <div><small>Enter 发送 · Shift + Enter 换行</small><button id="chat-send" class="primary" type="submit">发送</button></div>
+          <textarea id="chat-input" rows="3" maxlength="2000" placeholder="输入信息，或附上行程单、预订单…"></textarea>
+          <div id="selected-files" class="selected-files hidden"></div>
+          <div><label class="attach-button" for="trip-files">＋ 添加图片 / PDF<input id="trip-files" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"></label><small>最多 10 个 · 单个 10 MB · 合计 30 MB</small><button id="chat-send" class="primary" type="submit">发送</button></div>
         </form>
       </section>
 
@@ -53,6 +54,7 @@
           <div><p class="eyebrow">CONFIRMED ITINERARY</p><h2 id="active-title"></h2></div>
           <a id="ics-link" class="ghost button-link" href="#">导出 ICS</a>
         </div>
+        <section id="import-queue" class="import-queue hidden" aria-live="polite"></section>
         <div id="conflicts" class="conflicts"></div>
         <div id="timeline" class="timeline"><p class="empty">尚无已确认行程。与左侧 Agent 对话，或使用下方快捷添加。</p></div>
 

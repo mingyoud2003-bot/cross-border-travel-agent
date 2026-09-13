@@ -454,6 +454,20 @@ def test_client_cannot_spoof_provider_provenance_on_normal_transport_endpoint():
     assert "Provider" in response.json()["detail"]
 
 
+def test_client_cannot_spoof_file_or_catalog_provenance_on_normal_endpoint():
+    api = client()
+    trip = api.post("/api/trips", json={"title": "No file spoof"}).json()
+    for source_type in ("pdf", "image", "catalog"):
+        payload = train_payload()
+        payload["source"]["source_type"] = source_type
+        response = api.post(
+            f"/api/trips/{trip['id']}/transport",
+            headers={"If-Match": "1"},
+            json=payload,
+        )
+        assert response.status_code == 422
+
+
 def test_expired_provider_candidate_requires_a_fresh_lookup():
     api = flight_lookup_client()
     trip = api.post("/api/trips", json={"title": "Expired"}).json()

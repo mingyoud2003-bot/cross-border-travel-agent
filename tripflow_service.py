@@ -7,9 +7,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from tripflow_conflicts import detect_conflicts
+from tripflow_imports import ImportBatch
 from tripflow_models import (
     Conflict,
     CreateTripInput,
+    SourceInput,
     StayInput,
     StayReservation,
     TransportInput,
@@ -25,6 +27,19 @@ class TripNotFoundError(KeyError):
 
 class TripVersionConflictError(RuntimeError):
     pass
+
+
+def _field_provenance(
+    fields: list[str],
+    fallback: SourceInput,
+    field_sources: dict[str, SourceInput] | None,
+) -> dict:
+    return {
+        field: provenance_for_fields(
+            [field], (field_sources or {}).get(field, fallback)
+        )[field]
+        for field in fields
+    }
 
 
 class TripFlowService:
@@ -53,6 +68,17 @@ class TripFlowService:
             CREATE TABLE IF NOT EXISTS tripflow_conversations (
                 trip_id TEXT PRIMARY KEY,
                 conversation_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (trip_id) REFERENCES tripflow_trips(trip_id)
+            )
+            """
+        )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tripflow_import_batches (
+                batch_id TEXT PRIMARY KEY,
+                trip_id TEXT NOT NULL,
+                batch_json TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY (trip_id) REFERENCES tripflow_trips(trip_id)
             )
@@ -88,6 +114,9 @@ class TripFlowService:
     def delete_trip(self, trip_id: str) -> bool:
         with self._lock:
             self._connection.execute(
+                "DELETE FROM tripflow_import_batches WHERE trip_id = ?", (trip_id,)
+            )
+            self._connection.execute(
                 "DELETE FROM tripflow_conversations WHERE trip_id = ?", (trip_id,)
             )
             cursor = self._connection.execute(
@@ -95,6 +124,53 @@ class TripFlowService:
             )
             self._connection.commit()
         return cursor.rowcount > 0
+
+    def save_import_batch(self, batch: ImportBatch) -> None:
+        self.get_trip(batch.trip_id)
+        batch.updated_at = datetime.now(UTC)
+        with self._lock:
+            self._connection.execute(
+                """
+                INSERT INTO tripflow_import_batches (batch_id, trip_id, batch_json, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(batch_id) DO UPDATE SET
+                    batch_json = excluded.batch_json,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    batch.id,
+                    batch.trip_id,
+                    batch.model_dump_json(),
+                    batch.updated_at.isoformat(),
+                ),
+            )
+            self._connection.commit()
+
+    def get_import_batch(self, trip_id: str, batch_id: str) -> ImportBatch:
+        self.get_trip(trip_id)
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT batch_json FROM tripflow_import_batches
+                WHERE batch_id = ? AND trip_id = ?
+                """,
+                (batch_id, trip_id),
+            ).fetchone()
+        if row is None:
+            raise TripNotFoundError(batch_id)
+        return ImportBatch.model_validate_json(row[0])
+
+    def list_import_batches(self, trip_id: str) -> list[ImportBatch]:
+        self.get_trip(trip_id)
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT batch_json FROM tripflow_import_batches
+                WHERE trip_id = ? ORDER BY updated_at DESC
+                """,
+                (trip_id,),
+            ).fetchall()
+        return [ImportBatch.model_validate_json(row[0]) for row in rows]
 
     def get_conversation(self, trip_id: str) -> dict:
         self.get_trip(trip_id)
@@ -139,24 +215,23 @@ class TripFlowService:
         payload: TransportInput,
         *,
         expected_version: int,
+        field_sources: dict[str, SourceInput] | None = None,
     ) -> Trip:
-        provenance = provenance_for_fields(
-            [
-                "mode",
-                "operator",
-                "service_number",
-                "origin.name",
-                "origin.city",
-                "origin.timezone",
-                "destination.name",
-                "destination.city",
-                "destination.timezone",
-                "departure_at",
-                "arrival_at",
-                "status",
-            ],
-            payload.source,
-        )
+        fields = [
+            "mode",
+            "operator",
+            "service_number",
+            "origin.name",
+            "origin.city",
+            "origin.timezone",
+            "destination.name",
+            "destination.city",
+            "destination.timezone",
+            "departure_at",
+            "arrival_at",
+            "status",
+        ]
+        provenance = _field_provenance(fields, payload.source, field_sources)
         reservation = TransportReservation(
             **payload.model_dump(exclude={"source"}),
             provenance=provenance,
@@ -171,11 +246,17 @@ class TripFlowService:
         payload: StayInput,
         *,
         expected_version: int,
+        field_sources: dict[str, SourceInput] | None = None,
     ) -> Trip:
-        provenance = provenance_for_fields(
-            ["property_name", "city", "address", "check_in", "check_out", "status"],
-            payload.source,
-        )
+        fields = [
+            "property_name",
+            "city",
+            "address",
+            "check_in",
+            "check_out",
+            "status",
+        ]
+        provenance = _field_provenance(fields, payload.source, field_sources)
         reservation = StayReservation(
             **payload.model_dump(exclude={"source"}),
             provenance=provenance,

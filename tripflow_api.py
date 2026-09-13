@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import Annotated
 
-from fastapi import APIRouter, Header, HTTPException, Response
+from fastapi import APIRouter, File, Form, Header, HTTPException, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
@@ -26,6 +27,29 @@ from tripflow_agent import (
     proposal_ready,
 )
 from tripflow_models import CreateTripInput, StayInput, TransportInput, Trip
+from tripflow_imports import (
+    AgentsDocumentExtractor,
+    DocumentExtractionError,
+    DocumentExtractor,
+    ImportBatch,
+    ImportCandidate,
+    ImportConfirmationRequest,
+    ImportConfirmationResult,
+    MAX_BATCH_BYTES,
+    MAX_FILE_BYTES,
+    MAX_UPLOAD_FILES,
+    SourceDocument,
+    candidates_from_extraction,
+    file_digest,
+    mark_duplicates,
+    normalize_document_extraction,
+    safe_filename,
+    stay_field_sources,
+    stay_input_from_candidate,
+    transport_field_sources,
+    transport_input_from_candidate,
+    validate_upload,
+)
 from tripflow_service import (
     TripFlowService,
     TripNotFoundError,
@@ -55,6 +79,7 @@ def build_tripflow_router(
     proposal_service: ProposalService | None = None,
     flight_provider: FlightProvider | None = None,
     conversation_service: ConversationService | None = None,
+    document_extractor: DocumentExtractor | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/trips", tags=["TripFlow"])
     proposals = proposal_service or AgentsProposalService()
@@ -62,6 +87,7 @@ def build_tripflow_router(
         os.environ.get("AERODATABOX_RAPIDAPI_KEY")
     )
     conversations = conversation_service or AgentsConversationService()
+    documents = document_extractor or AgentsDocumentExtractor()
 
     @router.post("", response_model=Trip, status_code=201)
     def create_trip(payload: CreateTripInput) -> Trip:
@@ -80,13 +106,203 @@ def build_tripflow_router(
             raise HTTPException(status_code=404, detail="trip not found")
         return Response(status_code=204)
 
+    @router.get("/{trip_id}/imports", response_model=list[ImportBatch])
+    def list_imports(trip_id: str) -> list[ImportBatch]:
+        try:
+            return service.list_import_batches(trip_id)
+        except TripNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="trip not found") from exc
+
+    @router.get("/{trip_id}/imports/{batch_id}", response_model=ImportBatch)
+    def get_import(trip_id: str, batch_id: str) -> ImportBatch:
+        try:
+            return service.get_import_batch(trip_id, batch_id)
+        except TripNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="import batch not found") from exc
+
+    @router.post("/{trip_id}/imports", response_model=ImportBatch, status_code=201)
+    async def create_import(
+        trip_id: str,
+        files: Annotated[list[UploadFile], File()],
+        instructions: Annotated[str, Form(max_length=1000)] = "",
+    ) -> ImportBatch:
+        try:
+            service.get_trip(trip_id)
+        except TripNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="trip not found") from exc
+        if not files or len(files) > MAX_UPLOAD_FILES:
+            raise HTTPException(status_code=422, detail="单次最多上传 10 个文件。")
+
+        records: list[tuple[SourceDocument, bytes | None]] = []
+        seen_hashes: set[str] = set()
+        total_bytes = 0
+        for upload in files:
+            filename = safe_filename(upload.filename or "upload")
+            data = await upload.read(MAX_FILE_BYTES + 1)
+            total_bytes += len(data)
+            digest = file_digest(data)
+            try:
+                mime = validate_upload(filename, upload.content_type or "", data)
+                if total_bytes > MAX_BATCH_BYTES:
+                    raise ValueError("单次上传文件总大小不能超过 30 MB。")
+                duplicate = digest in seen_hashes
+                document = SourceDocument(
+                    filename=filename,
+                    mime_type=mime,
+                    sha256=digest,
+                    size_bytes=len(data),
+                    status="duplicate" if duplicate else "parsed",
+                )
+                records.append((document, None if duplicate else data))
+                seen_hashes.add(digest)
+            except ValueError as exc:
+                records.append(
+                    (
+                        SourceDocument(
+                            filename=filename,
+                            mime_type=(upload.content_type or "application/octet-stream")[
+                                :120
+                            ],
+                            sha256=digest,
+                            size_bytes=len(data),
+                            status="failed",
+                            error=str(exc),
+                        ),
+                        None,
+                    )
+                )
+
+        semaphore = asyncio.Semaphore(2)
+
+        async def extract_one(document: SourceDocument, data: bytes | None):
+            if data is None:
+                return None
+            try:
+                async with semaphore:
+                    extraction = await documents.extract(
+                        filename=document.filename,
+                        mime_type=document.mime_type,
+                        data=data,
+                        instructions=instructions.strip(),
+                    )
+                    return normalize_document_extraction(extraction)
+            except DocumentExtractionError as exc:
+                document.status = "failed"
+                document.error = str(exc)
+                return None
+            except Exception:
+                logger.exception("document_extraction_unexpected_error")
+                document.status = "failed"
+                document.error = "文件解析暂时失败，请稍后重试。"
+                return None
+
+        extracted = await asyncio.gather(
+            *(extract_one(document, data) for document, data in records)
+        )
+        candidates: list[ImportCandidate] = []
+        for (document, _), extraction in zip(records, extracted):
+            if extraction is not None:
+                candidates.extend(candidates_from_extraction(extraction, document))
+        mark_duplicates(candidates)
+        parsed = sum(document.status == "parsed" for document, _ in records)
+        failed = sum(document.status == "failed" for document, _ in records)
+        status = "failed" if not parsed else "partial_failed" if failed else "completed"
+        batch = ImportBatch(
+            trip_id=trip_id,
+            status=status,
+            instructions=instructions.strip(),
+            documents=[document for document, _ in records],
+            candidates=candidates,
+        )
+        service.save_import_batch(batch)
+        return batch
+
+    @router.post(
+        "/{trip_id}/imports/{batch_id}/candidates/{candidate_id}/confirm",
+        response_model=ImportConfirmationResult,
+    )
+    def confirm_import_candidate(
+        trip_id: str,
+        batch_id: str,
+        candidate_id: str,
+        payload: ImportConfirmationRequest,
+        if_match: Annotated[int, Header(alias="If-Match", ge=1)],
+    ) -> ImportConfirmationResult:
+        try:
+            batch = service.get_import_batch(trip_id, batch_id)
+            candidate = _import_candidate(batch, candidate_id)
+            if candidate.review_status != "pending":
+                raise ValueError("该候选已经处理。")
+            if candidate.duplicate_of and not payload.force_duplicate:
+                raise ValueError("该候选与同批次行程重复，请确认是否仍要添加。")
+            document = next(
+                item for item in batch.documents if item.id == candidate.source_document_id
+            )
+            if candidate.kind == "transport":
+                if payload.stay:
+                    raise ValueError("候选类型与补全数据不一致。")
+                item = transport_input_from_candidate(
+                    candidate, document.mime_type, payload.transport
+                )
+                trip = service.add_transport(
+                    trip_id,
+                    item,
+                    expected_version=if_match,
+                    field_sources=transport_field_sources(
+                        candidate, document.mime_type, item
+                    ),
+                )
+            else:
+                if payload.transport:
+                    raise ValueError("候选类型与补全数据不一致。")
+                item = stay_input_from_candidate(
+                    candidate, document.mime_type, payload.stay
+                )
+                trip = service.add_stay(
+                    trip_id,
+                    item,
+                    expected_version=if_match,
+                    field_sources=stay_field_sources(
+                        candidate, document.mime_type, item
+                    ),
+                )
+            candidate.review_status = "confirmed"
+            service.save_import_batch(batch)
+            return ImportConfirmationResult(trip=trip, batch=batch)
+        except TripNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="import candidate not found") from exc
+        except (ValueError, StopIteration) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except TripVersionConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @router.post(
+        "/{trip_id}/imports/{batch_id}/candidates/{candidate_id}/skip",
+        response_model=ImportBatch,
+    )
+    def skip_import_candidate(
+        trip_id: str, batch_id: str, candidate_id: str
+    ) -> ImportBatch:
+        try:
+            batch = service.get_import_batch(trip_id, batch_id)
+            candidate = _import_candidate(batch, candidate_id)
+            if candidate.review_status == "confirmed":
+                raise ValueError("已确认候选不能跳过。")
+            candidate.review_status = "skipped"
+            service.save_import_batch(batch)
+            return batch
+        except TripNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="import candidate not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     @router.post("/{trip_id}/transport", response_model=Trip)
     def add_transport(
         trip_id: str,
         payload: TransportInput,
         if_match: Annotated[int, Header(alias="If-Match", ge=1)],
     ) -> Trip:
-        _reject_client_provider_source(payload)
+        _reject_client_trusted_source(payload)
         try:
             return service.add_transport(
                 trip_id, payload, expected_version=if_match
@@ -102,7 +318,7 @@ def build_tripflow_router(
         payload: StayInput,
         if_match: Annotated[int, Header(alias="If-Match", ge=1)],
     ) -> Trip:
-        _reject_client_provider_source(payload)
+        _reject_client_trusted_source(payload)
         try:
             return service.add_stay(trip_id, payload, expected_version=if_match)
         except TripNotFoundError as exc:
@@ -117,7 +333,7 @@ def build_tripflow_router(
         payload: TransportInput,
         if_match: Annotated[int, Header(alias="If-Match", ge=1)],
     ) -> Trip:
-        _reject_client_provider_source(payload)
+        _reject_client_trusted_source(payload)
         try:
             return service.update_transport(
                 trip_id, reservation_id, payload, expected_version=if_match
@@ -136,7 +352,7 @@ def build_tripflow_router(
         payload: StayInput,
         if_match: Annotated[int, Header(alias="If-Match", ge=1)],
     ) -> Trip:
-        _reject_client_provider_source(payload)
+        _reject_client_trusted_source(payload)
         try:
             return service.update_stay(
                 trip_id, reservation_id, payload, expected_version=if_match
@@ -283,12 +499,21 @@ def build_tripflow_router(
     return router
 
 
-def _reject_client_provider_source(payload: TransportInput | StayInput) -> None:
-    if payload.source.source_type == "provider":
+def _reject_client_trusted_source(payload: TransportInput | StayInput) -> None:
+    if payload.source.source_type in {"provider", "pdf", "image", "catalog"}:
         raise HTTPException(
             status_code=422,
-            detail="Provider 来源只能通过服务端航班候选确认端点写入。",
+            detail="Provider、文件和目录来源只能由服务端可验证流程写入。",
         )
+
+
+def _import_candidate(batch: ImportBatch, candidate_id: str) -> ImportCandidate:
+    candidate = next(
+        (item for item in batch.candidates if item.id == candidate_id), None
+    )
+    if candidate is None:
+        raise TripNotFoundError(candidate_id)
+    return candidate
 
 
 async def _populate_provider_lookups(

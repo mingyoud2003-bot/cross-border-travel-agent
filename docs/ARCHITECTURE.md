@@ -1,11 +1,11 @@
 # Architecture and design decisions
 
-## TripFlow v0.9.2 system boundary
+## TripFlow v0.10.0 system boundary
 
 TripFlow separates language understanding, external data, and state mutation:
 
 ```text
-Multi-turn user messages
+Multi-turn messages or batch image/PDF input
    |
 persisted transcript + structured draft
    |
@@ -21,6 +21,15 @@ manual draft candidates      AeroDataBox lookup
                               |
 versioned itinerary + field provenance -> conflicts -> stable ICS
 ```
+
+Document imports use a separate typed extraction Agent. Raw bytes are validated,
+held only for the request, and sent at most twice concurrently. One document may
+produce many candidates; one failed document does not abort its siblings. SQLite
+stores only hashes, filenames, short evidence excerpts, typed candidates, and review
+state. Each candidate follows `pending -> confirmed|skipped`; only the versioned
+confirmation endpoint can mutate the itinerary. When a user completes or corrects a
+field, its provenance is `form`; unchanged visible fields retain `pdf`/`image`, and
+canonical city timezones are explicitly attributed to the server catalog.
 
 The model may propose facts but cannot call AeroDataBox directly or manufacture a
 provider result. Application code authorizes only a specific-flight lookup with an
@@ -85,6 +94,10 @@ For TripFlow, the current invariants are:
 8. Assistant prose cannot claim a candidate is recorded or reviewable. The API
    derives its reply and `ready_for_confirmation` from the same normalized draft;
    the UI retains a reopenable review action for every ready candidate.
+9. Uploaded bytes must match an allowed MIME signature and remain within per-file,
+   batch, and count limits; raw artifacts are not persisted by this demo.
+10. Every extracted reservation is a pending candidate. Parsing success is never
+    equivalent to user confirmation or an itinerary write.
 
 The retained Atlas control plane adds these legacy decision-workflow invariants:
 
