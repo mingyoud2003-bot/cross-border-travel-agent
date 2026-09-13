@@ -58,6 +58,25 @@
         <div id="conflicts" class="conflicts"></div>
         <div id="timeline" class="timeline"><p class="empty">尚无已确认行程。与左侧 Agent 对话，或使用下方快捷添加。</p></div>
 
+        <section id="rules-panel" class="rules-panel" aria-labelledby="rules-title">
+          <div class="rules-head">
+            <div><p class="eyebrow">GROUNDED TRAVEL RULES</p><h3 id="rules-title">询问这段行程的规则</h3></div>
+            <span class="evidence-badge">官方来源 · 有据才答</span>
+          </div>
+          <p class="rules-note">目前覆盖 British Airways、Lufthansa 及部分 oneworld 行李、值机和休息室规则。</p>
+          <form id="rules-form" class="rules-form">
+            <label>关联交通行程<select id="rule-reservation" required><option value="">请先添加交通行程</option></select></label>
+            <label>你的问题<textarea id="rule-question" rows="2" maxlength="1200" required placeholder="例如：这趟经济舱可以带多少随身行李？"></textarea></label>
+            <div class="rule-suggestions">
+              <button type="button" class="suggestion" data-rule-question="这趟经济舱的随身行李规则是什么？">随身行李</button>
+              <button type="button" class="suggestion" data-rule-question="这趟航班什么时候开放在线值机？">值机时间</button>
+              <button type="button" class="suggestion" data-rule-question="我是 BA Silver，这趟可以使用休息室吗？">会员权益</button>
+            </div>
+            <button id="rules-submit" type="submit" class="primary full">检索官方规则</button>
+          </form>
+          <div id="rules-result" class="rules-result hidden" aria-live="polite"></div>
+        </section>
+
         <details id="manual-panel" class="manual-panel">
           <summary><span><b>快捷手动添加</b><small>只填写必要信息</small></span><span>＋</span></summary>
           <div class="manual-body">

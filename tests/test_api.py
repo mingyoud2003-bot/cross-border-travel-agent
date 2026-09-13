@@ -107,6 +107,10 @@ def test_web_ui_and_static_assets_are_served():
     assert '洛杉矶:"America/Los_Angeles"' in tripflow_script.text
     assert '旧金山:"America/Los_Angeles"' in tripflow_script.text
     assert "跨越国际日期变更线时" in tripflow_script.text
+    assert "/rules/query" in tripflow_script.text
+    assert "safeExternalUrl" in tripflow_script.text
+    assert 'id="rules-form"' in page.text
+    assert "官方来源 · 有据才答" in page.text
     assert "escapeHtml" in tripflow_script.text
 
     legacy_page = api.get("/legacy")

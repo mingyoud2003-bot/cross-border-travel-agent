@@ -55,6 +55,7 @@ from tripflow_service import (
     TripNotFoundError,
     TripVersionConflictError,
 )
+from travel_rules import RuleAnswer, RuleQuery, TravelRulesService
 
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,7 @@ def build_tripflow_router(
     flight_provider: FlightProvider | None = None,
     conversation_service: ConversationService | None = None,
     document_extractor: DocumentExtractor | None = None,
+    rules_service: TravelRulesService | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/trips", tags=["TripFlow"])
     proposals = proposal_service or AgentsProposalService()
@@ -88,6 +90,7 @@ def build_tripflow_router(
     )
     conversations = conversation_service or AgentsConversationService()
     documents = document_extractor or AgentsDocumentExtractor()
+    rules = rules_service or TravelRulesService()
 
     @router.post("", response_model=Trip, status_code=201)
     def create_trip(payload: CreateTripInput) -> Trip:
@@ -99,6 +102,14 @@ def build_tripflow_router(
             return service.get_trip(trip_id)
         except TripNotFoundError as exc:
             raise HTTPException(status_code=404, detail="trip not found") from exc
+
+    @router.post("/{trip_id}/rules/query", response_model=RuleAnswer)
+    async def query_travel_rules(trip_id: str, payload: RuleQuery) -> RuleAnswer:
+        try:
+            trip = service.get_trip(trip_id)
+        except TripNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="trip not found") from exc
+        return await rules.ask(trip, payload)
 
     @router.delete("/{trip_id}", status_code=204)
     def delete_trip(trip_id: str) -> Response:

@@ -5,6 +5,13 @@
 候选。确认后系统才会写入航班、火车和住宿行程，检查
 时间重叠与换乘不足，最后导出带稳定 UID 的 ICS 日历。
 
+v0.11.0 新增与已确认行程绑定的规则 RAG：用户可针对某一航段询问行李、值机/登机
+和常旅客休息室规则。系统先以承运商与规则主题做 metadata filter，再执行 embedding
+语义排序；回答只能引用本次检索返回的服务端 evidence ID，官方来源、证据摘要与复核
+日期会随答案返回。缺少舱位/票价或会员等级时先追问，知识越界、证据过期和外部服务
+失败时明确拒答，不回退到模型记忆。首期知识范围有意限定为 British Airways、
+Lufthansa 以及 oneworld/Qatar Airways 的相关公开规则。
+
 v0.10.2 新增批量图片/PDF 导入：单个文件可提取多段航班、火车和住宿，
 多文件可并发解析并将失败隔离。候选按顺序逐条展示：完整项可直接确认，缺失项预填到
 紧凑表单后再确认。已知城市统一为 canonical identity 与 IANA 时区；导入时会按出发地和
@@ -32,6 +39,7 @@ flowchart LR
     C --> S[Versioned itinerary + provenance]
     S --> D[Conflict detector]
     S --> E[Stable ICS export]
+    S --> R[Itinerary-aware grounded rules RAG]
 ```
 
 ### 可靠性边界
@@ -53,6 +61,10 @@ flowchart LR
 - 每个确认字段保留 source type、source ID、原文摘要、确认状态和记录时间。
 - 修改、删除使用 `If-Match` 乐观并发控制；过期页面不能静默覆盖新版本。
 - 冲突检测、时区校验、持久化和 ICS 生成由应用代码负责，不交给模型推理。
+- 规则问答先绑定已确认航段；多个航段时必须由用户选择，不能让模型猜测适用对象。
+- RAG 先按承运商/联盟与主题过滤，再做 embedding 排序；最终引用 ID 必须属于本次检索集。
+- 规则文档带 `retrieved_at` 和 `review_after`，过期证据只展示来源而不形成结论。
+- 规则问题中的提示注入被当作不可信数据；无证据、有伪造引用或依赖不可用时拒绝回答。
 
 v0.6 的跨境出行决策引擎仍保留在仓库中，作为复杂多轮 state / tool / RAG 可靠性的
 对照实现；下文保留其设计与评测记录。
@@ -141,9 +153,11 @@ python evals/run_tripflow_eval.py --category provider_guardrail
 python evals/run_agent_eval.py --validate-only
 python evals/run_agent_eval.py --category decision
 python evals/run_agent_eval.py --all
+python evals/run_travel_rules_eval.py --validate-only
+python evals/run_travel_rules_eval.py
 ```
 
-当前确定性测试为 179/179。TripFlow Eval 数据集覆盖 100 个 case。文件导入另有
+当前确定性测试为 193/193。TripFlow Eval 数据集覆盖 100 个 case。文件导入另有
 12 项确定性单元/API 测试，并已用合成行程图片跑通真实视觉模型路径。原 90-case
 抽取集首轮 83/90，针对否定语义增加确定性闸门，并将有原文证据的运营商/产品线分栏
 差异记录为有限等价值后，对同一批真实输出离线 regrade 为 90/90，基础设施失败为 0。
@@ -155,7 +169,9 @@ case、136 个对话轮次，100/100 通过；工具路由、行为契约、stru
 provenance 与输出契约四项指标均为 100%，基础设施失败经同版本断点重试后为 0。
 其中综合决策专项为 10/10。详见 [评测报告](evals/REPORT.md)。本地单 worker、
 SQLite session 生命周期压测在 200 次请求、并发 20 下为 200/200 成功，吞吐
-161.66 ops/s，p95 252.41 ms；该结果不包含模型调用。
+161.66 ops/s，p95 252.41 ms；该结果不包含模型调用。规则 RAG 另有 50 个真实模型
+case，覆盖 grounded answer、行程绑定、缺参追问、知识越界、不支持承运商和提示注入；
+结果及失败归因见 [规则 RAG 评测报告](evals/TRAVEL_RULES_REPORT.md)。
 
 ## HTTP contract
 
@@ -177,6 +193,9 @@ Provider 候选写入行程。v0.9 的 `GET/POST/DELETE /api/trips/{id}/conversa
 所有 TripFlow 写操作按 IP 限流；行程 ID 是高熵不可枚举标识符。
 `POST /api/trips/{id}/imports` 接收 multipart 批量文件，`GET .../imports`
 恢复未完成的核对队列，candidate `confirm/skip` 端点负责唯一状态迁移。
+`POST /api/trips/{id}/rules/query` 将问题绑定到指定的已确认交通行程，并返回结构化
+状态、适用行程 ID、缺失上下文、服务端引用、知识限制与端到端延迟；该端点只读，
+不会修改行程版本。
 
 同一会话通过 async lock 串行执行，不同会话可以并发。SDK 对话历史、业务
 structured state 与最近 30 条 trace 写入同一个 SQLite 文件的隔离表中，服务重启后
@@ -197,8 +216,8 @@ docker run --rm -p 8000:8000 \
 
 容器以非 root 用户运行，named volume 保存 SQLite 数据。当前限流器是面向单 worker
 部署的进程内保护；横向扩容时应替换为 Redis/API Gateway 限流。GitHub Actions 在
-每次 push/PR 执行 179 项测试、两套 Eval 数据集静态校验、JavaScript/Python
-语法检查和 Docker 构建；
+每次 push/PR 执行 193 项测试、三套 Eval 数据集静态校验、JavaScript/Python
+语法检查、三套 Eval 数据集静态校验和 Docker 构建；
 CI 不读取线上密钥，也不会产生模型费用。
 
 ## Deploy to Render

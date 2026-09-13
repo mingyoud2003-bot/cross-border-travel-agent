@@ -381,11 +381,54 @@ async function saveStay(payload) {
   return api(path,{method:editingStayId ? "PUT" : "POST",headers:{"If-Match":String(trip.version)},body:JSON.stringify(payload)});
 }
 
+document.querySelectorAll("[data-rule-question]").forEach((button) => button.addEventListener("click", () => {
+  $("rule-question").value=button.dataset.ruleQuestion;
+  if ($("rule-reservation").value) $("rules-form").requestSubmit();
+  else toast("请先选择一段已确认交通行程。");
+}));
+
+$("rules-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button=$("rules-submit");
+  button.disabled=true; button.textContent="正在检索…";
+  try {
+    const result=await api(`/api/trips/${trip.id}/rules/query`,{method:"POST",body:JSON.stringify({reservation_id:$("rule-reservation").value || null,question:$("rule-question").value.trim()})});
+    renderRuleAnswer(result);
+  } catch(error) { toast(error.message); }
+  finally { button.disabled=false; button.textContent="检索官方规则"; }
+});
+
+function renderRuleAnswer(result) {
+  const container=$("rules-result");
+  const labels={answered:"已基于证据回答",needs_clarification:"需要补充信息",out_of_scope:"当前范围不支持",insufficient_evidence:"证据不足",stale_evidence:"来源需要复核",unavailable:"服务暂时不可用"};
+  const warning=result.status!=="answered";
+  const citations=(result.citations || []).map((item)=>{
+    const url=safeExternalUrl(item.source_url);
+    const title=url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>` : escapeHtml(item.title);
+    return `<li>${title} · ${escapeHtml(item.source_name)} · 抓取于 ${escapeHtml(item.retrieved_at)}<br>${escapeHtml(item.excerpt)}</li>`;
+  }).join("");
+  const limitations=(result.limitations || []).map((item)=>`<p class="rule-limitations">限制：${escapeHtml(item)}</p>`).join("");
+  container.classList.remove("hidden");
+  container.innerHTML=`<span class="rule-status ${warning?"warning":""}">${escapeHtml(labels[result.status] || result.status)}</span><h4>${escapeHtml(result.answer)}</h4>${citations?`<ol class="rule-citations">${citations}</ol>`:""}${limitations}<p class="rule-limitations">检索证据：${escapeHtml((result.retrieved_evidence_ids || []).join(", ") || "无")} · ${escapeHtml(result.latency_ms)} ms</p>`;
+  container.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+function safeExternalUrl(value) {
+  try { const url=new URL(value); return url.protocol==="https:" ? url.toString() : ""; }
+  catch (_) { return ""; }
+}
+
 $("timeline").addEventListener("click", async (event) => {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
   const item = trip.reservations.find((candidate) => candidate.id === button.dataset.id);
   if (!item) return;
+  if (button.dataset.action === "rules") {
+    $("rule-reservation").value=item.id;
+    $("rule-question").focus();
+    $("rules-panel")?.scrollIntoView({behavior:"smooth",block:"center"});
+    return;
+  }
   if (button.dataset.action === "edit") { fillManualForm(item); return; }
   if (button.dataset.action === "delete" && window.confirm("确定删除这条已确认行程吗？")) {
     try { trip = await api(`/api/trips/${trip.id}/reservations/${item.id}`,{method:"DELETE",headers:{"If-Match":String(trip.version)}}); await render(); toast("已删除。"); } catch (error) { await recoverVersion(error); }
@@ -422,13 +465,22 @@ async function render() {
   $("active-title").textContent=trip.title; $("ics-link").href=`/api/trips/${trip.id}/calendar.ics`;
   const items=[...trip.reservations].sort((a,b)=>startOf(a).localeCompare(startOf(b)));
   $("timeline").innerHTML=items.length ? items.map(renderItem).join("") : '<p class="empty">尚无已确认行程。与左侧 Agent 对话，或使用下方快捷添加。</p>';
+  updateRuleReservations(items);
   const conflicts=await api(`/api/trips/${trip.id}/conflicts`);
   const conflictLabels={schedule_overlap:"时间重叠",short_connection:"换乘时间不足"};
   $("conflicts").innerHTML=conflicts.length ? conflicts.map((item)=>`<div class="conflict"><strong>${escapeHtml(conflictLabels[item.type] || item.type)}</strong><br>${escapeHtml(item.message)}</div>`).join("") : '<p class="no-conflicts">当前未发现交通时间冲突</p>';
 }
+function updateRuleReservations(items) {
+  const select=$("rule-reservation");
+  const previous=select.value;
+  const transports=items.filter((item)=>item.kind==="transport" && item.status==="confirmed");
+  select.innerHTML=transports.length ? transports.map((item)=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.operator)} ${escapeHtml(item.service_number || "")} · ${escapeHtml(item.origin.city)} → ${escapeHtml(item.destination.city)}</option>`).join("") : '<option value="">请先添加交通行程</option>';
+  if (transports.some((item)=>item.id===previous)) select.value=previous;
+}
 function startOf(item) { return item.kind === "transport" ? item.departure_at : item.check_in; }
 function renderItem(item) {
-  const actions=`<div class="item-actions"><button class="mini ghost" data-action="edit" data-id="${item.id}">编辑</button><button class="mini ghost danger" data-action="delete" data-id="${item.id}">删除</button></div>`;
+  const askRules=item.kind === "transport" ? `<button class="mini ghost" data-action="rules" data-id="${item.id}">问规则</button>` : "";
+  const actions=`<div class="item-actions">${askRules}<button class="mini ghost" data-action="edit" data-id="${item.id}">编辑</button><button class="mini ghost danger" data-action="delete" data-id="${item.id}">删除</button></div>`;
   if (item.kind === "stay") return `<article class="trip-item"><div class="trip-time">${escapeHtml(item.check_in)}</div><div class="trip-main"><strong>${escapeHtml(item.property_name)}</strong><span>${escapeHtml(item.city)} · ${escapeHtml(item.check_in)} → ${escapeHtml(item.check_out)}</span></div><div class="trip-meta"><span class="badge">USER CONFIRMED · R${item.revision}</span>${actions}</div></article>`;
   const provider=Object.values(item.provenance || {}).some((source)=>source.source_type === "provider");
   return `<article class="trip-item"><div class="trip-time">${escapeHtml(zonedDisplay(item.departure_at,item.origin.timezone))}</div><div class="trip-main"><strong>${escapeHtml(item.origin.city)} → ${escapeHtml(item.destination.city)}</strong><span>${escapeHtml(item.origin.name)} → ${escapeHtml(item.destination.name)} · ${escapeHtml(item.operator)} ${escapeHtml(item.service_number || "")}</span></div><div class="trip-meta">${escapeHtml(zonedDisplay(item.arrival_at,item.destination.timezone,false))}<br><span class="badge">${provider ? "PROVIDER CHECKED · " : ""}USER CONFIRMED · R${item.revision}</span>${actions}</div></article>`;

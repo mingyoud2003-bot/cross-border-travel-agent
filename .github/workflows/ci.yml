@@ -24,6 +24,7 @@ jobs:
         run: |
           python evals/run_agent_eval.py --validate-only
           python evals/run_tripflow_eval.py --validate-only
+          python evals/run_travel_rules_eval.py --validate-only
       - name: Compile Python sources
         run: python -m compileall -q .
       - name: Validate browser JavaScript syntax

@@ -1,6 +1,6 @@
 # Architecture and design decisions
 
-## TripFlow v0.10.2 system boundary
+## TripFlow v0.11.0 system boundary
 
 TripFlow separates language understanding, external data, and state mutation:
 
@@ -20,6 +20,10 @@ manual draft candidates      AeroDataBox lookup
                      explicit user confirmation
                               |
 versioned itinerary + field provenance -> conflicts -> stable ICS
+                  |
+       selected confirmed transport
+                  |
+provider/topic metadata filter -> embedding rank -> grounded answer + citations
 ```
 
 Document imports use a separate typed extraction Agent. Raw bytes are validated,
@@ -98,6 +102,12 @@ For TripFlow, the current invariants are:
    batch, and count limits; raw artifacts are not persisted by this demo.
 10. Every extracted reservation is a pending candidate. Parsing success is never
     equivalent to user confirmation or an itinerary write.
+11. A rules question is bound to one confirmed transport before retrieval; ambiguous
+    multi-leg questions require an explicit selection.
+12. Rule citations are reconstructed from server-owned records. An answer with no
+    citation or an evidence ID outside the retrieved set is blocked.
+13. Expired evidence, an unsupported provider/topic, and retrieval/model failure are
+    typed abstentions and never fall back to model memory.
 
 The retained Atlas control plane adds these legacy decision-workflow invariants:
 

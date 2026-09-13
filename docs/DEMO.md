@@ -38,6 +38,12 @@ python scripts/demo_product.py
 12. Open `/metrics` and the Eval report to connect the UI behavior to operational and
     regression evidence.
 
+For a shorter AI-application-focused demo, replace steps 8–11 with one grounded rule
+question. Select a confirmed BA flight, ask `我的经济舱 Basic 有免费托运行李吗？`, and
+show the answer's official source, evidence ID, review date, and bound reservation.
+Then remove `Basic` and show the deterministic cabin/fare clarification; finally ask a
+visa or unsupported-airline question and show the typed abstention.
+
 ## Interview explanation
 
 The central design choice is that the model handles language but does not own facts or
@@ -52,6 +58,9 @@ from actual failure modes, including stale-answer reuse after user corrections.
 - AeroDataBox checks a known flight number/date; it does not search fares, inventory,
   or every possible route, and its free tier has range/rate/quota limits.
 - The loyalty corpus is intentionally small and bounded.
+- The v0.11 rule corpus is deliberately limited to selected British Airways,
+  Lufthansa, oneworld, and Qatar Airways pages. It is not a global policy database,
+  and every answer still asks the traveler to recheck the official page and booking.
 - The local deployment is single-worker; distributed coordination is documented but
   not claimed as implemented.
 - The project provides decision support and never purchases a ticket.

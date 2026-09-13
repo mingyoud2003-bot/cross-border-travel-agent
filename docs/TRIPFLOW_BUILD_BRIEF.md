@@ -44,7 +44,9 @@ The core workflow is:
   warnings, and calendar export.
 - A persistent sequential review queue for batch document imports with partial
   failure isolation, duplicate hints, and field-level mixed provenance.
-- A 100-case real-model extraction/lookup-gating Eval plus 179 deterministic
+- An itinerary-aware grounded rules assistant for a bounded airline/alliance corpus,
+  with official citations, freshness gates, and explicit abstention.
+- A 100-case real-model extraction/lookup-gating Eval, a 50-case rule RAG Eval, plus 193 deterministic
   project tests.
 - No booking, payment, cancellation, realtime monitoring, or calendar mutation
   in the initial slice.
